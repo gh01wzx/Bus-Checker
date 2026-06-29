@@ -1,6 +1,7 @@
 import requests
 import os
 import config
+import statistics
 from collections import defaultdict
 from dotenv import load_dotenv
 
@@ -56,3 +57,21 @@ for route_id, delays in by_route.items():
     )
 
 summary.sort(key=lambda x: x["avg_delay_sec"], reverse=True)
+
+ON_TIME_EARLY = -60
+ON_TIME_LATE = 5 * 60
+
+delays = [row["delay"] for row in rows]
+on_time = [d for d in delays if ON_TIME_EARLY <= d <= ON_TIME_LATE]
+on_time_rate = len(on_time) / len(delays)
+all_routes_avg_delay = sum(delays) / len(delays)
+all_routes_median_delay = statistics.median(delays)
+early = [d for d in delays if d < ON_TIME_EARLY]
+late = [d for d in delays if d > ON_TIME_LATE]
+
+print(f"On time rate: {on_time_rate*100:.2f}%")
+print(f"Average delays(whole netwrok): {all_routes_avg_delay:.2f} seconds")
+print(f"Median delays(whole netwrok): {all_routes_median_delay} seconds")
+print(f"Number of bus running early(whole netwrok): {len(early)}")
+print(f"Number of bus running on time(whole netwrok): {len(on_time)}")
+print(f"Number of bus running late(whole netwrok): {len(late)}")
