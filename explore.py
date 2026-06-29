@@ -11,6 +11,12 @@ SUB_KEY = os.environ["AT_SUB_KEY"]
 MAX_DELAY = 15 * 60
 
 raw_resp = requests.get(URL, headers={"Ocp-Apim-Subscription-Key": SUB_KEY})
+
+if raw_resp.status_code != 200:
+    print(f"Request failed with status {raw_resp.status_code}")
+    print(raw_resp.text[:300])
+    raise SystemExit(1)
+
 data = raw_resp.json()
 entities = data["response"]["entity"]
 
@@ -45,7 +51,7 @@ for route_id, delays in by_route.items():
         {
             "route_id": route_id,
             "avg_delay_sec": round(avg_delay, 2),
-            "ongoing_trips": len(delays),
+            "trip_count": len(delays),
         }
     )
 
