@@ -53,6 +53,9 @@ for route_id, delays in by_route.items():
             "route_id": route_id,
             "avg_delay_sec": round(avg_delay, 2),
             "trip_count": len(delays),
+            "consistency_sec": (
+                round(statistics.stdev(delays), 2) if len(delays) > 1 else 0
+            ),
         }
     )
 
@@ -68,10 +71,29 @@ all_routes_avg_delay = sum(delays) / len(delays)
 all_routes_median_delay = statistics.median(delays)
 early = [d for d in delays if d < ON_TIME_EARLY]
 late = [d for d in delays if d > ON_TIME_LATE]
+late_routes = [s for s in summary if s["avg_delay_sec"] > 0]
+early_routes = [s for s in summary if s["avg_delay_sec"] < 0]
+late_routes_percentage = len(late_routes) / len(summary) * 100
+early_routes_percentage = len(early_routes) / len(summary) * 100
 
 print(f"On time rate: {on_time_rate*100:.2f}%")
-print(f"Average delays(whole netwrok): {all_routes_avg_delay:.2f} seconds")
-print(f"Median delays(whole netwrok): {all_routes_median_delay} seconds")
-print(f"Number of bus running early(whole netwrok): {len(early)}")
-print(f"Number of bus running on time(whole netwrok): {len(on_time)}")
-print(f"Number of bus running late(whole netwrok): {len(late)}")
+print(f"Average delays(whole network): {all_routes_avg_delay:.2f} seconds")
+print(f"Median delays(whole network): {all_routes_median_delay} seconds")
+print(f"Number of bus running early(whole network): {len(early)}")
+print(f"Number of bus running on time(whole network): {len(on_time)}")
+print(f"Number of bus running late(whole network): {len(late)}")
+print(f"Worst 3 routes by average delay: ")
+for route in summary[:3]:
+    print(
+        f"Route id: {route['route_id']} Average delay: {route['avg_delay_sec']} Trip count: {route['trip_count']}"
+    )
+print(f"{late_routes_percentage:.2f}% routes running late")
+print(f"{early_routes_percentage:.2f}% routes running early")
+
+summary.sort(key=lambda x: x["consistency_sec"], reverse=True)
+
+print(f"Worst 3 routes by delay consistency: ")
+for route in summary[:3]:
+    print(
+        f"Route id: {route['route_id']} Average delay: {route['avg_delay_sec']} Trip count: {route['trip_count']} Consistency in seconds(std): {route['consistency_sec']}"
+    )
