@@ -2,6 +2,9 @@ import requests
 import os
 import config
 import statistics
+import datetime
+import duckdb
+import pandas as pd
 from collections import defaultdict
 from dotenv import load_dotenv
 
@@ -20,8 +23,7 @@ if raw_resp.status_code != 200:
 
 data = raw_resp.json()
 entities = data["response"]["entity"]
-
-print("Number of trips:", len(entities))
+current_timestamp = datetime.datetime.now()
 
 rows = []
 for trip in entities:
@@ -33,12 +35,26 @@ for trip in entities:
 
     rows.append(
         {
+            "captured_at": current_timestamp,
             "route_id": tu["trip"]["route_id"],
+            "trip_id": tu["trip"]["trip_id"],
             "delay": delay,
         }
     )
 
+trip_punctuality_df = pd.DataFrame(rows)
+db_con = duckdb.connect("bus_data.duckdb")
 
+db_con.execute("""
+    CREATE TABLE IF NOT EXISTS trip_punctuality (
+        captured_at  TIMESTAMP,
+        route_id     VARCHAR,
+        trip_id      VARCHAR,
+        delay        INTEGER
+    )
+""")
+
+db_con.execute("INSERT INTO trip_punctuality SELECT * FROM trip_punctuality_df")
 by_route = defaultdict(list)
 
 for row in rows:
