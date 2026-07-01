@@ -5,6 +5,7 @@ import statistics
 import datetime
 import duckdb
 import pandas as pd
+import time
 from collections import defaultdict
 from dotenv import load_dotenv
 
@@ -131,8 +132,18 @@ def print_summary(rows):
         )
 
 
-if __name__ == "__main__":
+def run_once():
     entities = fetch_trip_updates(URL, SUB_KEY)
     rows = clean_rows(entities)
     store_rows(rows)
     print_summary(rows)
+
+
+if __name__ == "__main__":
+    INTERVAL_SEC = 20
+
+    while True:
+        print(f"--- Running at {datetime.datetime.now():%H:%M:%S} ---")
+        run_once()
+        print(f"Sleeping for {INTERVAL_SEC} seconds...")
+        time.sleep(INTERVAL_SEC)
