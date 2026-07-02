@@ -6,3 +6,7 @@ airflow/.env
 airflow/logs/
 airflow/plugins/
 airflow/config/
+bus_dbt/target/
+bus_dbt/dbt_packages/
+bus_dbt/logs/
+*.log

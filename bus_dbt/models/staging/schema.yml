@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: stg_trip_punctuality
+    columns:
+      - name: route_id
+        tests:
+          - not_null
+      - name: delay_sec
+        tests:
+          - not_null
