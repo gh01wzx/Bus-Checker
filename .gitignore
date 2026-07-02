@@ -2,4 +2,7 @@
 __pycache__/
 *.duckdb
 .env
-*.duckdb
+airflow/.env
+airflow/logs/
+airflow/plugins/
+airflow/config/

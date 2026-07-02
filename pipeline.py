@@ -13,6 +13,7 @@ load_dotenv()
 
 URL = config.TRIP_UPDATES_URL
 SUB_KEY = os.environ["AT_SUB_KEY"]
+db_path = os.environ.get("DUCKDB_PATH", "bus_data.duckdb")
 MAX_DELAY = 15 * 60
 # 1 min early 5 mins late are consider on time
 ON_TIME_EARLY = -60
@@ -59,7 +60,7 @@ def clean_rows(entities):
 def store_rows(rows):
     trip_punctuality_df = pd.DataFrame(rows)
 
-    with duckdb.connect("bus_data.duckdb") as db_con:
+    with duckdb.connect(db_path) as db_con:
         db_con.execute("""
             CREATE TABLE IF NOT EXISTS trip_punctuality (
                 captured_at  TIMESTAMP,
