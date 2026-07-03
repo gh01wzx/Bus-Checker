@@ -1,41 +1,43 @@
 import requests
 import os
 import config
-import statistics
 import datetime
 import duckdb
 import pandas as pd
-import time
-from collections import defaultdict
+import logging
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
-URL = config.TRIP_UPDATES_URL
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
+
+TRIP_UPDATES_URL = config.TRIP_UPDATES_URL
 SUB_KEY = os.environ["AT_SUB_KEY"]
-db_path = os.environ.get("DUCKDB_PATH", "bus_data.duckdb")
+DB_PATH = os.environ.get("DUCKDB_PATH", "bus_data.duckdb")
+# 15 mins is considered unreansonable data/delay
 MAX_DELAY = 15 * 60
 # 1 min early 5 mins late are consider on time
 ON_TIME_EARLY = -60
 ON_TIME_LATE = 5 * 60
 
 
-def fetch_trip_updates(URL, SUB_KEY):
-    raw_resp = requests.get(URL, headers={"Ocp-Apim-Subscription-Key": SUB_KEY})
+def fetch_trip_updates():
+    raw_resp = requests.get(
+        TRIP_UPDATES_URL, headers={"Ocp-Apim-Subscription-Key": SUB_KEY}
+    )
 
     if raw_resp.status_code != 200:
         print(f"Request failed with status {raw_resp.status_code}")
         print(raw_resp.text[:300])
         raise SystemExit(1)
 
-    data = raw_resp.json()
-    entities = data["response"]["entity"]
-
-    return entities
+    return raw_resp.json()["response"]["entity"]
 
 
 def clean_rows(entities):
-    current_timestamp = datetime.datetime.now()
+    captured_at = datetime.datetime.now()
     rows = []
 
     for trip in entities:
@@ -47,7 +49,7 @@ def clean_rows(entities):
 
         rows.append(
             {
-                "captured_at": current_timestamp,
+                "captured_at": captured_at,
                 "route_id": tu["trip"]["route_id"],
                 "trip_id": tu["trip"]["trip_id"],
                 "delay": delay,
@@ -60,7 +62,7 @@ def clean_rows(entities):
 def store_rows(rows):
     trip_punctuality_df = pd.DataFrame(rows)
 
-    with duckdb.connect(db_path) as db_con:
+    with duckdb.connect(DB_PATH) as db_con:
         db_con.execute("""
             CREATE TABLE IF NOT EXISTS trip_punctuality (
                 captured_at  TIMESTAMP,
@@ -74,77 +76,14 @@ def store_rows(rows):
             SELECT captured_at, route_id, trip_id, delay FROM trip_punctuality_df
         """)
 
-
-def print_summary(rows):
-    by_route = defaultdict(list)
-
-    for row in rows:
-        by_route[row["route_id"]].append(row["delay"])
-
-    summary = []
-
-    for route_id, delays in by_route.items():
-        avg_delay = sum(delays) / len(delays)
-        summary.append(
-            {
-                "route_id": route_id,
-                "avg_delay_sec": round(avg_delay, 2),
-                "trip_count": len(delays),
-                "consistency_sec": (
-                    round(statistics.stdev(delays), 2) if len(delays) > 1 else 0
-                ),
-            }
-        )
-
-    summary.sort(key=lambda x: x["avg_delay_sec"], reverse=True)
-
-    delays = [row["delay"] for row in rows]
-    on_time = [d for d in delays if ON_TIME_EARLY <= d <= ON_TIME_LATE]
-    on_time_rate = len(on_time) / len(delays)
-    all_routes_avg_delay = sum(delays) / len(delays)
-    all_routes_median_delay = statistics.median(delays)
-    early = [d for d in delays if d < ON_TIME_EARLY]
-    late = [d for d in delays if d > ON_TIME_LATE]
-    late_routes = [s for s in summary if s["avg_delay_sec"] > 0]
-    early_routes = [s for s in summary if s["avg_delay_sec"] < 0]
-    late_routes_percentage = len(late_routes) / len(summary) * 100
-    early_routes_percentage = len(early_routes) / len(summary) * 100
-
-    print(f"On time rate: {on_time_rate*100:.2f}%")
-    print(f"Average delays(whole network): {all_routes_avg_delay:.2f} seconds")
-    print(f"Median delays(whole network): {all_routes_median_delay} seconds")
-    print(f"Number of bus running early(whole network): {len(early)}")
-    print(f"Number of bus running on time(whole network): {len(on_time)}")
-    print(f"Number of bus running late(whole network): {len(late)}")
-    print(f"Worst 3 routes by average delay: ")
-    for route in summary[:3]:
-        print(
-            f"Route id: {route['route_id']} Average delay: {route['avg_delay_sec']} Trip count: {route['trip_count']}"
-        )
-    print(f"{late_routes_percentage:.2f}% routes running late")
-    print(f"{early_routes_percentage:.2f}% routes running early")
-
-    summary.sort(key=lambda x: x["consistency_sec"], reverse=True)
-
-    print(f"Worst 3 routes by delay consistency: ")
-    for route in summary[:3]:
-        print(
-            f"Route id: {route['route_id']} Average delay: {route['avg_delay_sec']} Trip count: {route['trip_count']} Consistency in seconds(std): {route['consistency_sec']}"
-        )
+    logger.info("Stored %d rows into %s", len(rows), DB_PATH)
 
 
 def run_once():
-    entities = fetch_trip_updates(URL, SUB_KEY)
+    entities = fetch_trip_updates()
     rows = clean_rows(entities)
     store_rows(rows)
-    print_summary(rows)
 
 
 if __name__ == "__main__":
-    INTERVAL_SEC = 20
-
-    while True:
-        print(f"--- Running at {datetime.datetime.now():%H:%M:%S} ---")
-        run_once()
-        print(f"Sleeping for {INTERVAL_SEC} seconds...")
-        time.sleep(INTERVAL_SEC)
+    run_once()
