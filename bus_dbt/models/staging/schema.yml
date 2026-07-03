@@ -1,5 +1,10 @@
 version: 2
 
+sources:
+  - name: main
+    tables:
+      - name: trip_punctuality
+
 models:
   - name: stg_trip_punctuality
     columns:

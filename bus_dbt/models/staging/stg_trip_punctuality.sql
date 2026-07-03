@@ -3,4 +3,4 @@ SELECT
     route_id,
     trip_id,
     delay AS delay_sec
-FROM trip_punctuality
+FROM {{ source('main', 'trip_punctuality') }}

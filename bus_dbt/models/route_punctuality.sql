@@ -1,7 +1,7 @@
-SELECT
+select
     route_id,
-    ROUND(AVG(delay_sec), 2) AS avg_delay_sec,
-    COUNT(*) AS trip_count
-FROM {{ ref('stg_trip_punctuality') }}
-GROUP BY route_id
-ORDER BY avg_delay_sec DESC
+    round(avg(delay_sec), 2) as avg_delay_sec,
+    count(*) as trip_count
+from {{ ref('stg_trip_punctuality') }}
+group by route_id
+order by avg_delay_sec desc
