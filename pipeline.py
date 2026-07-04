@@ -16,8 +16,6 @@ logger = logging.getLogger(__name__)
 TRIP_UPDATES_URL = config.TRIP_UPDATES_URL
 SUB_KEY = os.environ["AT_SUB_KEY"]
 DB_PATH = os.environ.get("DUCKDB_PATH", "bus_data.duckdb")
-# 15 mins is considered unreansonable data/delay
-MAX_DELAY = 15 * 60
 # 1 min early 5 mins late are consider on time
 ON_TIME_EARLY = -60
 ON_TIME_LATE = 5 * 60
@@ -44,7 +42,7 @@ def clean_rows(entities):
         tu = trip["trip_update"]
         delay = tu.get("delay")
 
-        if delay is None or abs(delay) > MAX_DELAY:  # filter out dirty ones
+        if delay is None: 
             continue
 
         rows.append(
