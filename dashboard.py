@@ -10,12 +10,16 @@ DB_PATH = os.getenv("DUCKDB_PATH", "bus_data.duckdb")
 def load_data():
     try:
         with duckdb.connect(DB_PATH, read_only=True) as con:
-            routes = con.execute("SELECT * FROM route_punctuality ORDER BY avg_delay_sec DESC LIMIT 15").df()
+            routes = con.execute(
+                "SELECT * FROM route_punctuality ORDER BY avg_delay_sec DESC LIMIT 15"
+            ).df()
             summary = con.execute("SELECT * FROM network_summary").df()
             over_time = con.execute("SELECT * FROM punctuality_over_time").df()
         return routes, summary, over_time
     except duckdb.CatalogException as e:
-        st.error(f"Database tables do not exist. Please run the data pipeline first.\n\nDetails: {e}")
+        st.error(
+            f"Database tables do not exist. Please run the data pipeline first.\n\nDetails: {e}"
+        )
         st.stop()
     except Exception as e:
         st.error(f"Failed to load data: {e}")
@@ -39,7 +43,11 @@ col2.metric("Total trips", int(row["total_trips"]))
 col3.metric("Avg delay", f"{row['avg_delay_sec']}s")
 
 st.subheader("On-time rate over time")
-if not over_time.empty and "hour" in over_time.columns and "on_time_pct" in over_time.columns:
+if (
+    not over_time.empty
+    and "hour" in over_time.columns
+    and "on_time_pct" in over_time.columns
+):
     st.line_chart(over_time, x="hour", y="on_time_pct")
 else:
     st.info("Time series data unavailable or missing required columns")
@@ -58,7 +66,11 @@ if not routes.empty and "route_no" in routes.columns:
             "route_name": "Route name",
         },
     )
-    fig.update_xaxes(type="category")
+    fig.update_xaxes(
+        type="category",
+        categoryorder="array",
+        categoryarray=routes["route_no"].tolist(),
+    )
     st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("Route delay data unavailable")
