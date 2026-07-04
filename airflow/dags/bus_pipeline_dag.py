@@ -1,28 +1,35 @@
 import datetime
 import sys
+from pathlib import Path
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 
-# The pipeline code is mounted here inside the container
-PIPELINE_PATH = "/opt/airflow/bus-checker"
-sys.path.insert(0, PIPELINE_PATH)
+PIPELINE_PATH = Path("/opt/airflow/bus-checker")
 
 
 def collect_snapshot():
-    """Fetch, clean, and store one snapshot of bus punctuality data."""
+    if not PIPELINE_PATH.exists():
+        raise ImportError(f"Pipeline path not found: {PIPELINE_PATH}")
+    sys.path.insert(0, str(PIPELINE_PATH))
     import pipeline
 
-    pipeline.run_once()
+    pipeline.run_pipeline()
 
+
+default_args = {
+    "retries": 2,
+    "retry_delay": datetime.timedelta(seconds=60),
+}
 
 with DAG(
     dag_id="bus_pipeline",
-    start_date=datetime.datetime(2026, 1, 1),
+    start_date=datetime.datetime(2025, 1, 1),
     schedule="*/5 * * * *",
     catchup=False,
     max_active_runs=1,
     tags=["bus"],
+    default_args=default_args,
 ) as dag:
     collect_task = PythonOperator(
         task_id="collect_snapshot",
