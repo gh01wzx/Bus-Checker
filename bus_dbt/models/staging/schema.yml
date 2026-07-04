@@ -4,6 +4,8 @@ sources:
   - name: main
     tables:
       - name: trip_punctuality
+      - name: gtfs_routes
+      - name: gtfs_trips
 
 models:
   - name: stg_trip_punctuality

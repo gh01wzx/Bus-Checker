@@ -10,3 +10,4 @@ bus_dbt/target/
 bus_dbt/dbt_packages/
 bus_dbt/logs/
 *.log
+gtfs/*

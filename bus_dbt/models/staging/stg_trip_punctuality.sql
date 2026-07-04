@@ -1,6 +1,9 @@
-SELECT
-    captured_at,
-    route_id,
-    trip_id,
-    delay AS delay_sec
-FROM {{ source('main', 'trip_punctuality') }}
+select
+    p.captured_at,
+    p.route_id,
+    p.trip_id,
+    p.delay as delay_sec
+from {{ source('main', 'trip_punctuality') }} p
+where p.route_id in (
+    select route_id from {{ source('main', 'gtfs_routes') }}
+)

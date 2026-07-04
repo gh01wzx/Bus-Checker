@@ -1,5 +1,6 @@
 import duckdb
 import streamlit as st
+import plotly.express as px
 
 DB_PATH = "bus_data.duckdb"
 
@@ -30,5 +31,16 @@ st.subheader("On-time rate over time")
 st.line_chart(over_time, x="hour", y="on_time_pct")
 
 st.subheader("Most delayed routes")
-st.dataframe(routes)
-st.bar_chart(routes, x="route_id", y="avg_delay_sec")
+fig = px.bar(
+    routes,
+    x="route_no",
+    y="avg_delay_sec",
+    hover_data=["route_name"],
+    labels={
+        "route_no": "Route",
+        "avg_delay_sec": "Avg delay (sec)",
+        "route_name": "Route name",
+    },
+)
+fig.update_xaxes(type="category")
+st.plotly_chart(fig)
