@@ -6,6 +6,8 @@ sources:
       - name: trip_punctuality
       - name: gtfs_routes
       - name: gtfs_trips
+      - name: gtfs_stops
+      - name: stop_punctuality
 
 models:
   - name: stg_trip_punctuality
@@ -14,5 +16,27 @@ models:
         tests:
           - not_null
       - name: delay_sec
+        tests:
+          - not_null
+
+  - name: stg_stops
+    columns:
+      - name: stop_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_stop_punctuality
+    columns:
+      - name: stop_id
+        tests:
+          - not_null
+      - name: delay_sec
+        tests:
+          - not_null
+
+  - name: stop_delay_by_route
+    columns:
+      - name: stop_id
         tests:
           - not_null

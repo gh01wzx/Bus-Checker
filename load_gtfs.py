@@ -52,6 +52,7 @@ def load_gtfs() -> None:
 
         routes_file = find_gtfs_file(gtfs_dir, "routes.txt")
         trips_file = find_gtfs_file(gtfs_dir, "trips.txt")
+        stops_file = find_gtfs_file(gtfs_dir, "stops.txt")
 
         with duckdb.connect(DB_PATH) as con:
             con.execute(f"""
@@ -64,8 +65,13 @@ def load_gtfs() -> None:
                 SELECT route_id, trip_headsign, direction_id
                 FROM read_csv_auto('{trips_file}')
             """)
+            con.execute(f"""
+                CREATE OR REPLACE TABLE gtfs_stops AS
+                SELECT stop_id, stop_name, stop_lat, stop_lon
+                FROM read_csv_auto('{stops_file}')
+            """)
 
-        logger.info("Loaded gtfs_routes and gtfs_trips into DuckDB.")
+        logger.info("Loaded GTFS routes, trips and stops into DuckDB.")
 
 
 if __name__ == "__main__":
