@@ -37,6 +37,7 @@ if summary.empty:
 
 row = summary.iloc[0]
 
+st.subheader("Historical averages")
 col1, col2, col3 = st.columns(3)
 col1.metric("On-time rate", f"{row['on_time_pct']}%")
 col2.metric("Total trips", int(row["total_trips"]))

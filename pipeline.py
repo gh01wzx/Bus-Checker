@@ -18,7 +18,7 @@ SUB_KEY = os.environ["AT_SUB_KEY"]
 DB_PATH = os.environ.get("DUCKDB_PATH", "bus_data.duckdb")
 
 
-def fetch_realtime_trips():
+def fetch_realtime_trips() -> List[Dict[str, Any]]:
     logger.info(f"Fetching trip updates from {TRIP_UPDATES_URL}")
     raw_resp = requests.get(
         TRIP_UPDATES_URL, headers={"Ocp-Apim-Subscription-Key": SUB_KEY}, timeout=30
@@ -39,7 +39,7 @@ def fetch_realtime_trips():
     return entities
 
 
-def extract_delay_records(entities):
+def extract_delay_records(entities: List[Dict[str, Any]]):
     captured_at = datetime.now(timezone.utc)
     rows: List[Dict[str, Any]] = []
 
