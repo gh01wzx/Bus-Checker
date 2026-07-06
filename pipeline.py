@@ -39,8 +39,55 @@ def fetch_realtime_trips() -> List[Dict[str, Any]]:
     return entities
 
 
-def extract_delay_records(entities: List[Dict[str, Any]]):
-    captured_at = datetime.now(timezone.utc)
+def extract_stop_records(
+    entities: List[Dict[str, Any]], captured_at: datetime
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+
+    for trip in entities:
+        tu = trip.get("trip_update")
+        if tu is None:
+            continue
+
+        stu = tu.get("stop_time_update")
+        if stu is None:
+            continue
+        if isinstance(stu, dict):
+            stu = [stu]
+
+        route_id = tu["trip"]["route_id"]
+        trip_id = tu["trip"]["trip_id"]
+
+        for stop in stu:
+            arrival = stop.get("arrival")
+            departure = stop.get("departure")
+            if arrival and arrival.get("delay") is not None:
+                delay = arrival["delay"]
+            elif departure and departure.get("delay") is not None:
+                delay = departure["delay"]
+            else:
+                continue
+
+            rows.append(
+                {
+                    "captured_at": captured_at,
+                    "route_id": route_id,
+                    "trip_id": trip_id,
+                    "stop_id": stop.get("stop_id"),
+                    "stop_sequence": stop.get("stop_sequence"),
+                    "delay": delay,
+                }
+            )
+
+    logger.info(f"Extracted {len(rows)} stop-level rows from {len(entities)} entities")
+
+    return rows
+
+
+def extract_delay_records(
+    entities: List[Dict[str, Any]], captured_at: datetime
+) -> List[Dict[str, Any]]:
+
     rows: List[Dict[str, Any]] = []
 
     for trip in entities:
@@ -66,7 +113,7 @@ def extract_delay_records(entities: List[Dict[str, Any]]):
     return rows
 
 
-def load_to_database(rows: List[Dict[str, Any]]) -> None:
+def load_to_database(rows: List[Dict[str, Any]], action_type: str) -> None:
     if not rows:
         logger.warning("No rows to store, skipping DB write")
         return
@@ -74,28 +121,53 @@ def load_to_database(rows: List[Dict[str, Any]]) -> None:
     df = pd.DataFrame(rows)
 
     with duckdb.connect(DB_PATH) as con:
-        con.execute("""
+        if action_type == "trip":
+            con.execute("""
             CREATE TABLE IF NOT EXISTS trip_punctuality (
                 captured_at  TIMESTAMP,
                 route_id     VARCHAR,
                 trip_id      VARCHAR,
                 delay        INTEGER
             )
-        """)
-        con.register("temp_trip_updates", df)
-        con.execute("""
+            """)
+            con.register("temp_trip_updates", df)
+            con.execute("""
             INSERT INTO trip_punctuality
             SELECT captured_at, route_id, trip_id, delay
             FROM temp_trip_updates
-        """)
+            """)
+        elif action_type == "stop":
+            con.execute("""
+            CREATE TABLE IF NOT EXISTS stop_punctuality (
+                captured_at     TIMESTAMP,
+                route_id        VARCHAR,
+                trip_id         VARCHAR,
+                stop_id         VARCHAR,
+                stop_sequence   INTEGER,
+                delay           INTEGER        
+                        )
+            """)
+            con.register("temp_stop_updates", df)
+            con.execute("""
+            INSERT INTO stop_punctuality
+            SELECT captured_at, route_id, trip_id, stop_id, stop_sequence, delay
+            FROM temp_stop_updates
+            """)
+        else:
+            raise ValueError(f"Unknown action_type: {action_type}")
 
     logger.info(f"Stored {len(rows)} rows into {DB_PATH}")
 
 
 def run_pipeline():
     entities = fetch_realtime_trips()
-    rows = extract_delay_records(entities)
-    load_to_database(rows)
+    captured_at = datetime.now(timezone.utc)
+
+    trip_rows = extract_delay_records(entities, captured_at)
+    load_to_database(trip_rows, "trip")
+
+    stop_rows = extract_stop_records(entities, captured_at)
+    load_to_database(stop_rows, "stop")
 
 
 if __name__ == "__main__":
