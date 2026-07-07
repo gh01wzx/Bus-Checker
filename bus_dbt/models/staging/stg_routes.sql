@@ -2,4 +2,4 @@ select
     route_id,
     route_short_name,
     route_type
-from {{source('main', 'gtfs_routes')}}
+from {{source('public', 'gtfs_routes')}}

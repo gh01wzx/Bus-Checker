@@ -4,4 +4,4 @@ select
     route_id,
     stop_sequence,
     delay as delay_sec
-from {{ source('main', 'stop_punctuality') }}
+from {{ source('public', 'stop_punctuality') }}

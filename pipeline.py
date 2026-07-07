@@ -8,6 +8,7 @@ import logging
 from dotenv import load_dotenv
 from typing import List, Dict, Any
 from datetime import datetime, timezone
+from sqlalchemy import create_engine
 
 load_dotenv()
 
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 TRIP_UPDATES_URL = config.TRIP_UPDATES_URL
 SUB_KEY = os.environ["AT_SUB_KEY"]
 DB_PATH = os.environ.get("DUCKDB_PATH", "bus_data.duckdb")
+DB_URL = os.environ["SUPABASE_DB_URL"]
 
 
 def fetch_realtime_trips() -> List[Dict[str, Any]]:
@@ -113,8 +115,7 @@ def extract_delay_records(
 
     return rows
 
-
-def load_to_database(rows: List[Dict[str, Any]], action_type: str) -> None:
+    # def load_to_database(rows: List[Dict[str, Any]], action_type: str) -> None:
     if not rows:
         logger.warning("No rows to store, skipping DB write")
         return
@@ -159,6 +160,21 @@ def load_to_database(rows: List[Dict[str, Any]], action_type: str) -> None:
             raise ValueError(f"Unknown action_type: {action_type}")
 
     logger.info(f"Stored {len(rows)} rows into {DB_PATH}")
+
+
+def load_to_database(rows, action_type):
+    if not rows:
+        logger.warning("No rows to store, skipping DB write")
+        return
+
+    df = pd.DataFrame(rows)
+    table = "trip_punctuality" if action_type == "trip" else "stop_punctuality"
+
+    engine = create_engine(DB_URL)
+    df.to_sql(table, engine, if_exists="append", index=False)
+    engine.dispose()
+
+    logger.info(f"Stored {len(rows)} rows into {table}")
 
 
 def run_pipeline():

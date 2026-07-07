@@ -1,53 +1,57 @@
 import os
-import duckdb
+from dotenv import load_dotenv
+import pandas as pd
 import streamlit as st
 import plotly.express as px
+from sqlalchemy import create_engine, text
 
-DB_PATH = os.getenv("DUCKDB_PATH", "bus_data.duckdb")
+load_dotenv()
+
+DB_URL = os.environ["SUPABASE_DB_URL"]
 
 
 @st.cache_data(ttl=300)
 def load_data():
+    engine = create_engine(DB_URL)
     try:
-        with duckdb.connect(DB_PATH, read_only=True) as con:
-            routes = con.execute(
-                "SELECT * FROM route_punctuality ORDER BY avg_delay_sec DESC LIMIT 15"
-            ).df()
-            summary = con.execute("SELECT * FROM network_summary").df()
-            over_time = con.execute("SELECT * FROM punctuality_over_time").df()
-            route_options = con.execute("""
-                SELECT DISTINCT route_id, route_no, route_name
-                FROM stop_delay_by_route
-                ORDER BY route_no
-            """).df()
-            directions = con.execute("""
-                SELECT route_id, direction_id, trip_headsign,
-                avg_delay_sec, on_time_pct, trip_count
-                FROM direction_comparison
-            """).df()
-        return routes, summary, over_time, route_options, directions
-    except duckdb.CatalogException as e:
-        st.error(
-            f"Database tables do not exist. Please run the data pipeline first.\n\nDetails: {e}"
+        routes = pd.read_sql(
+            "SELECT * FROM route_punctuality ORDER BY avg_delay_sec DESC LIMIT 15",
+            engine,
         )
-        st.stop()
+        summary = pd.read_sql("SELECT * FROM network_summary", engine)
+        over_time = pd.read_sql("SELECT * FROM punctuality_over_time", engine)
+        route_options = pd.read_sql(
+            "SELECT DISTINCT route_id, route_no, route_name "
+            "FROM stop_delay_by_route ORDER BY route_no",
+            engine,
+        )
+        directions = pd.read_sql(
+            "SELECT route_id, direction_id, trip_headsign, "
+            "avg_delay_sec, on_time_pct, trip_count FROM direction_comparison",
+            engine,
+        )
+        return routes, summary, over_time, route_options, directions
     except Exception as e:
         st.error(f"Failed to load data: {e}")
         st.stop()
+    finally:
+        engine.dispose()
 
 
 @st.cache_data(ttl=300)
 def load_stops_for_route(route_id: str):
-    with duckdb.connect(DB_PATH, read_only=True) as con:
-        return con.execute(
-            """
-            SELECT stop_name, avg_delay_sec, sample_count
-            FROM stop_delay_by_route
-            WHERE route_id = ?
-            ORDER BY stop_sequence
-        """,
-            [route_id],
-        ).df()
+    engine = create_engine(DB_URL)
+    try:
+        return pd.read_sql(
+            text(
+                "SELECT stop_name, avg_delay_sec, sample_count "
+                "FROM stop_delay_by_route WHERE route_id = :rid ORDER BY stop_sequence"
+            ),
+            engine,
+            params={"rid": route_id},
+        )
+    finally:
+        engine.dispose()
 
 
 st.set_page_config(page_title="Auckland Bus Punctuality", layout="wide")

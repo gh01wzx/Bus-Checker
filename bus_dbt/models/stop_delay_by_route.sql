@@ -6,7 +6,7 @@ select
     t.trip_headsign as route_name,
     round(avg(sp.delay_sec), 2) as avg_delay_sec,
     count(*) as sample_count,
-    min(sp.stop_sequence) as stop_sequence,
+    min(sp.stop_sequence) as stop_sequence
 from {{ ref('stg_stop_punctuality') }} sp
 left join {{ ref('stg_stops') }} ss on sp.stop_id = ss.stop_id
 left join {{ ref('stg_routes') }} r on sp.route_id = r.route_id

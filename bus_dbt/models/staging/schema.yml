@@ -1,7 +1,7 @@
 version: 2
 
 sources:
-  - name: main
+  - name: public
     tables:
       - name: trip_punctuality
       - name: gtfs_routes

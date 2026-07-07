@@ -1,5 +1,4 @@
 import os
-import duckdb
 import config
 import requests
 import tempfile
@@ -7,8 +6,13 @@ import logging
 import zipfile
 
 from pathlib import Path
+from sqlalchemy import create_engine
 
-DB_PATH = os.getenv("DUCKDB_PATH", "bus_data.duckdb")
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DB_URL = os.environ["SUPABASE_DB_URL"]
 GTFS_DOWNLOAD_URL = config.GTFS_DOWNLOAD_URL
 logger = logging.getLogger(__name__)
 
@@ -46,32 +50,29 @@ def download_and_extract_gtfs(extract_to: Path) -> None:
 
 
 def load_gtfs() -> None:
+    import pandas as pd
+
     with tempfile.TemporaryDirectory() as tmpdir:
         gtfs_dir = Path(tmpdir)
         download_and_extract_gtfs(gtfs_dir)
 
-        routes_file = find_gtfs_file(gtfs_dir, "routes.txt")
-        trips_file = find_gtfs_file(gtfs_dir, "trips.txt")
-        stops_file = find_gtfs_file(gtfs_dir, "stops.txt")
+        routes = pd.read_csv(find_gtfs_file(gtfs_dir, "routes.txt"))[
+            ["route_id", "route_short_name", "route_type"]
+        ]
+        trips = pd.read_csv(find_gtfs_file(gtfs_dir, "trips.txt"))[
+            ["route_id", "trip_headsign", "direction_id"]
+        ]
+        stops = pd.read_csv(find_gtfs_file(gtfs_dir, "stops.txt"))[
+            ["stop_id", "stop_name", "stop_lat", "stop_lon"]
+        ]
 
-        with duckdb.connect(DB_PATH) as con:
-            con.execute(f"""
-                CREATE OR REPLACE TABLE gtfs_routes AS
-                SELECT route_id, route_short_name, route_type
-                FROM read_csv_auto('{routes_file}')
-            """)
-            con.execute(f"""
-                CREATE OR REPLACE TABLE gtfs_trips AS
-                SELECT route_id, trip_headsign, direction_id
-                FROM read_csv_auto('{trips_file}')
-            """)
-            con.execute(f"""
-                CREATE OR REPLACE TABLE gtfs_stops AS
-                SELECT stop_id, stop_name, stop_lat, stop_lon
-                FROM read_csv_auto('{stops_file}')
-            """)
+        engine = create_engine(DB_URL)
+        routes.to_sql("gtfs_routes", engine, if_exists="replace", index=False)
+        trips.to_sql("gtfs_trips", engine, if_exists="replace", index=False)
+        stops.to_sql("gtfs_stops", engine, if_exists="replace", index=False)
+        engine.dispose()
 
-        logger.info("Loaded GTFS routes, trips and stops into DuckDB.")
+        logger.info("Loaded gtfs_routes, gtfs_trips, gtfs_stops into Supabase.")
 
 
 if __name__ == "__main__":

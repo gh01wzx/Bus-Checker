@@ -2,5 +2,5 @@ select
     route_id,
     direction_id,
     any_value(trip_headsign) as trip_headsign
-from {{ source('main', 'gtfs_trips') }}
+from {{ source('public', 'gtfs_trips') }}
 group by route_id, direction_id
