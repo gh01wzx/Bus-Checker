@@ -1,7 +1,6 @@
 import requests
 import os
 import config
-import duckdb
 import pandas as pd
 import logging
 
@@ -16,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 TRIP_UPDATES_URL = config.TRIP_UPDATES_URL
 SUB_KEY = os.environ["AT_SUB_KEY"]
-DB_PATH = os.environ.get("DUCKDB_PATH", "bus_data.duckdb")
 DB_URL = os.environ["SUPABASE_DB_URL"]
 
 
@@ -114,52 +112,6 @@ def extract_delay_records(
     logger.info(f"Cleaned {len(rows)} valid rows from {len(entities)} entities")
 
     return rows
-
-    # def load_to_database(rows: List[Dict[str, Any]], action_type: str) -> None:
-    if not rows:
-        logger.warning("No rows to store, skipping DB write")
-        return
-
-    df = pd.DataFrame(rows)
-
-    with duckdb.connect(DB_PATH) as con:
-        if action_type == "trip":
-            con.execute("""
-            CREATE TABLE IF NOT EXISTS trip_punctuality (
-                captured_at     TIMESTAMP,
-                route_id        VARCHAR,
-                trip_id         VARCHAR,
-                delay           INTEGER,
-                direction_id    INTEGER
-            )
-            """)
-            con.register("temp_trip_updates", df)
-            con.execute("""
-            INSERT INTO trip_punctuality
-            SELECT captured_at, route_id, trip_id, delay, direction_id
-            FROM temp_trip_updates
-            """)
-        elif action_type == "stop":
-            con.execute("""
-            CREATE TABLE IF NOT EXISTS stop_punctuality (
-                captured_at     TIMESTAMP,
-                route_id        VARCHAR,
-                trip_id         VARCHAR,
-                stop_id         VARCHAR,
-                stop_sequence   INTEGER,
-                delay           INTEGER        
-                        )
-            """)
-            con.register("temp_stop_updates", df)
-            con.execute("""
-            INSERT INTO stop_punctuality
-            SELECT captured_at, route_id, trip_id, stop_id, stop_sequence, delay
-            FROM temp_stop_updates
-            """)
-        else:
-            raise ValueError(f"Unknown action_type: {action_type}")
-
-    logger.info(f"Stored {len(rows)} rows into {DB_PATH}")
 
 
 def load_to_database(rows, action_type):
