@@ -105,6 +105,7 @@ def extract_delay_records(
                 "route_id": tu["trip"]["route_id"],
                 "trip_id": tu["trip"]["trip_id"],
                 "delay": delay,
+                "direction_id": tu["trip"]["direction_id"],
             }
         )
 
@@ -124,16 +125,17 @@ def load_to_database(rows: List[Dict[str, Any]], action_type: str) -> None:
         if action_type == "trip":
             con.execute("""
             CREATE TABLE IF NOT EXISTS trip_punctuality (
-                captured_at  TIMESTAMP,
-                route_id     VARCHAR,
-                trip_id      VARCHAR,
-                delay        INTEGER
+                captured_at     TIMESTAMP,
+                route_id        VARCHAR,
+                trip_id         VARCHAR,
+                delay           INTEGER,
+                direction_id    INTEGER
             )
             """)
             con.register("temp_trip_updates", df)
             con.execute("""
             INSERT INTO trip_punctuality
-            SELECT captured_at, route_id, trip_id, delay
+            SELECT captured_at, route_id, trip_id, delay, direction_id
             FROM temp_trip_updates
             """)
         elif action_type == "stop":

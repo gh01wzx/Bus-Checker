@@ -40,3 +40,20 @@ models:
       - name: stop_id
         tests:
           - not_null
+  - name: stg_trips_by_direction
+    columns:
+      - name: route_id
+        tests:
+          - not_null
+      - name: direction_id
+        tests:
+          - not_null
+
+  - name: direction_comparison
+    columns:
+      - name: route_id
+        tests:
+          - not_null
+      - name: direction_id
+        tests:
+          - not_null
