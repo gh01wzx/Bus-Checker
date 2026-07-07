@@ -1,8 +1,9 @@
 name: Collect bus data
 
 on:
-  schedule:
-    - cron: "*/10 * * * *"
+  schedule: # 7 - 19 nz time
+    - cron: "*/10 19-23 * * *"   # UTC 19:00-23:59
+    - cron: "*/10 0-7 * * *"     # UTC 00:00-07:59
   workflow_dispatch:
 
 jobs:
