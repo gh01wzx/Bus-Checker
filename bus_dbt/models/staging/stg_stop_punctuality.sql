@@ -5,3 +5,7 @@ select
     stop_sequence,
     delay as delay_sec
 from {{ source('public', 'stop_punctuality') }}
+where route_id in (
+    select route_id from {{ source('main', 'gtfs_routes') }}
+    where route_type = 3
+)
