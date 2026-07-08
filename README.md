@@ -19,6 +19,7 @@ AT Realtime API ──> Python ingestion (Airflow for local/Github Actions for c
 - Most delayed routes — ranked by average delay, with readable route names
 - Stop-level delay — which stops give more deley on a particular route
 - Direction comparison — inbound vs outbound punctuality per route
+- Heatmap — stop-level delays plotted on a map, late and early
 - **Ongoing..**
 
 ## How to use it

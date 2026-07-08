@@ -30,7 +30,8 @@ def load_data():
             "avg_delay_sec, on_time_pct, trip_count FROM direction_comparison",
             engine,
         )
-        return routes, summary, over_time, route_options, directions
+        geo = pd.read_sql("SELECT * FROM stop_delay_geo", engine)
+        return routes, summary, over_time, route_options, directions, geo
     except Exception as e:
         st.error(f"Failed to load data: {e}")
         st.stop()
@@ -57,7 +58,7 @@ def load_stops_for_route(route_id: str):
 st.set_page_config(page_title="Auckland Bus Punctuality", layout="wide")
 st.title("Auckland Bus Punctuality")
 
-routes, summary, over_time, route_options, directions = load_data()
+routes, summary, over_time, route_options, directions, geo = load_data()
 
 if summary.empty:
     st.warning("No network summary data available. Please run data collection first.")
@@ -146,3 +147,35 @@ else:
     )
     fig.update_layout(bargap=0.6)
     st.plotly_chart(fig, use_container_width=True)
+
+
+st.subheader("Delay heatmap by stop")
+
+view = st.radio("View", ["Late (delayed)", "Early"], horizontal=True)
+
+if view == "Late (delayed)":
+    data = geo[geo["avg_delay_sec"] > 0].copy()
+    scale = "Reds"
+    crange = [0, 300]
+else:
+    data = geo[geo["avg_delay_sec"] < 0].copy()
+    data["avg_delay_sec"] = data["avg_delay_sec"].abs()
+    scale = "Greens"
+    crange = [0, 300]
+
+fig = px.scatter_mapbox(
+    data,
+    lat="stop_latitude",
+    lon="stop_longitude",
+    color="avg_delay_sec",
+    size="sample_count",
+    hover_name="stop_name",
+    color_continuous_scale=scale,
+    range_color=crange,
+    zoom=11,
+    mapbox_style="carto-darkmatter",
+    height=600,
+    opacity=0.7,
+)
+fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
+st.plotly_chart(fig, use_container_width=True)
