@@ -7,4 +7,5 @@ select
 from {{ source('public', 'trip_punctuality') }} p
 where p.route_id in (
     select route_id from {{ source('public', 'gtfs_routes') }}
+    where route_type = 3
 )
