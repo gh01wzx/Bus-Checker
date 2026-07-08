@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - run: python pipeline.py
+      - run: python collect_burst.py
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           AT_SUB_KEY: ${{ secrets.AT_SUB_KEY }}
