@@ -1,0 +1,161 @@
+import plotly.express as px
+import streamlit as st
+from warehouse import read_frame
+
+
+@st.cache_data(ttl=60)
+def load_data():
+    queries = [
+        "SELECT * FROM route_punctuality ORDER BY avg_delay_sec DESC LIMIT 15",
+        "SELECT * FROM network_summary",
+        "SELECT * FROM punctuality_over_time",
+        "SELECT DISTINCT route_id, route_no, route_name FROM stop_delay_by_route ORDER BY route_no",
+        "SELECT route_id, direction_id, trip_headsign, avg_delay_sec, on_time_pct, trip_count FROM direction_comparison",
+        "SELECT * FROM stop_delay_geo",
+    ]
+    try:
+        return tuple(read_frame(sql) for sql in queries)
+    except Exception:
+        st.info(
+            "Load GTFS reference data, collect observations, then run python build_warehouse.py."
+        )
+        st.stop()
+
+
+@st.cache_data(ttl=60)
+def load_stops_for_route(route_id):
+    return read_frame(
+        "SELECT stop_name, avg_delay_sec, sample_count FROM stop_delay_by_route "
+        "WHERE route_id = :rid ORDER BY stop_sequence",
+        {"rid": route_id},
+    )
+
+
+def render_overview():
+    routes, summary, over_time, route_options, directions, geo = load_data()
+
+    if summary.empty:
+        st.warning(
+            "No network summary data available. Please run data collection first."
+        )
+        st.stop()
+
+    row = summary.iloc[0]
+
+    st.subheader("Historical averages")
+    st.caption(
+        "Reported delay samples, not counts of completed journeys. On time: 60 seconds early to 5 minutes late."
+    )
+    col1, col2, col3 = st.columns(3)
+    col1.metric("On-time rate", f"{row['on_time_pct']}%")
+    col2.metric("Trip observations", int(row["total_trips"]))
+    col3.metric("Avg delay", f"{row['avg_delay_sec']}s")
+
+    st.subheader("On-time rate over time")
+    if (
+        not over_time.empty
+        and "hour" in over_time.columns
+        and "on_time_pct" in over_time.columns
+    ):
+        st.line_chart(over_time, x="hour", y="on_time_pct")
+    else:
+        st.info("Time series data unavailable or missing required columns")
+
+    st.subheader("Most delayed routes")
+    if not routes.empty and "route_no" in routes.columns:
+        hover_cols = ["route_name"] if "route_name" in routes.columns else None
+        fig = px.bar(
+            routes,
+            x="route_no",
+            y="avg_delay_sec",
+            hover_data=hover_cols,
+            labels={
+                "route_no": "Route",
+                "avg_delay_sec": "Avg delay (sec)",
+                "route_name": "Route name",
+            },
+        )
+        fig.update_xaxes(
+            type="category",
+            categoryorder="array",
+            categoryarray=routes["route_no"].tolist(),
+        )
+        st.plotly_chart(fig, width="stretch")
+    else:
+        st.info("Route delay data unavailable")
+
+    st.subheader("Stop-level delay by route")
+    if route_options.empty:
+        st.info("No stop-level data available yet.")
+    else:
+        labels = route_options.apply(
+            lambda x: f"{x['route_no']} — {x['route_name']}", axis=1
+        )
+        choice = st.selectbox(
+            "Select route",
+            options=route_options["route_id"],
+            format_func=lambda rid: labels[route_options["route_id"] == rid].iloc[0],
+        )
+        stops = load_stops_for_route(choice)
+        fig = px.bar(
+            stops,
+            x="stop_name",
+            y="avg_delay_sec",
+            hover_data=["sample_count"],
+            labels={"stop_name": "Stop", "avg_delay_sec": "Avg delay (sec)"},
+        )
+        fig.update_xaxes(type="category")
+        st.plotly_chart(fig, width="stretch")
+
+    st.subheader("Direction comparison")
+    if directions.empty:
+        st.info("No direction data available yet.")
+    else:
+        dir_routes = directions[["route_id"]].drop_duplicates().sort_values("route_id")
+        choice = st.selectbox("Select route", dir_routes["route_id"], key="dir_route")
+
+        sub = directions[directions["route_id"] == choice].copy()
+        sub["direction"] = sub["direction_id"].map(
+            {0: "Direction 0", 1: "Direction 1", -1: "Unknown"}
+        )
+
+        fig = px.bar(
+            sub,
+            x="direction",
+            y="avg_delay_sec",
+            hover_data=["trip_headsign", "on_time_pct", "trip_count"],
+            labels={"direction": "Direction", "avg_delay_sec": "Avg delay (sec)"},
+        )
+        fig.update_layout(bargap=0.6)
+        st.plotly_chart(fig, width="stretch")
+
+    st.subheader("Delay heatmap by stop")
+
+    view = st.radio("View", ["Late (delayed)", "Early"], horizontal=True)
+
+    if view == "Late (delayed)":
+        data = geo[geo["avg_delay_sec"] > 0].copy()
+        scale = "Reds"
+        crange = [0, 300]
+    else:
+        data = geo[geo["avg_delay_sec"] < 0].copy()
+        data["avg_delay_sec"] = data["avg_delay_sec"].abs()
+        scale = "Greens"
+        crange = [0, 300]
+
+    fig = px.scatter_mapbox(
+        data,
+        lat="stop_latitude",
+        lon="stop_longitude",
+        color="avg_delay_sec",
+        size="sample_count",
+        hover_name="stop_name",
+        color_continuous_scale=scale,
+        range_color=crange,
+        zoom=11,
+        mapbox_style="carto-darkmatter",
+        height=600,
+        opacity=0.7,
+    )
+    fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
+    st.plotly_chart(fig, width="stretch")

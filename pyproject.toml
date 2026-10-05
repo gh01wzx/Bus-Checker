@@ -1,0 +1,5 @@
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.py$'
+extend-exclude = '/(\.venv|work|gtfs|bus_dbt/target)/'

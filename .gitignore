@@ -11,3 +11,6 @@ bus_dbt/dbt_packages/
 bus_dbt/logs/
 *.log
 gtfs/*
+work/
+*.duckdb.wal
+profiles.yml

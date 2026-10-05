@@ -1,0 +1,47 @@
+version: 2
+sources:
+  - name: operations
+    schema: "{{ 'main' if target.type == 'duckdb' else 'public' }}"
+    tables:
+      - name: bus_ingestion_runs
+      - name: bus_quarantine
+      - name: bus_raw_batches
+models:
+  - name: dim_route
+    description: One current bus route per route ID; non-bus modes excluded.
+    columns:
+      - name: route_id
+        data_tests: [not_null, unique]
+  - name: fct_trip_observation
+    description: One trip delay reading per source feed. Loaded-at watermark supports late source events. Includes all transport modes; the route mart restricts to current GTFS bus routes.
+    columns:
+      - name: observation_id
+        data_tests: [not_null, unique]
+      - name: batch_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: source('operations', 'bus_raw_batches')
+                field: batch_id
+      - name: route_id
+        data_tests: [not_null]
+      - name: delay_sec
+        description: Reported delay in seconds; negative means early. This is a realtime prediction, not independently verified arrival time.
+        data_tests: [not_null]
+      - name: punctuality
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Early', 'On time', 'Late']
+  - name: route_hourly_reliability
+    description: Bus observations grouped by Auckland date, hour, direction and route. Sum counts before calculating percentages; never average subgroup percentages.
+    columns:
+      - name: route_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_route')
+                field: route_id
+      - name: sample_count
+        data_tests: [not_null]

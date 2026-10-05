@@ -1,9 +1,13 @@
 name: Collect bus data
 
+concurrency:
+  group: bus-data-pipeline
+  cancel-in-progress: false
+
 on:
-  schedule: # 7 - 19 nz time
-    - cron: "*/10 19-23 * * *"   # UTC 19:00-23:59
-    - cron: "*/10 0-7 * * *"     # UTC 00:00-07:59
+  schedule:
+    - cron: "*/10 19-23 * * *"
+    - cron: "*/10 0-7 * * *"
   workflow_dispatch:
 
 jobs:
@@ -14,8 +18,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-engineering.txt
       - run: python collect_burst.py
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           AT_SUB_KEY: ${{ secrets.AT_SUB_KEY }}
+      - name: Build and test analytics
+        run: python build_warehouse.py
+        env:
+          BUS_BACKEND: postgres
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}

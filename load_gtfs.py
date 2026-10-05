@@ -1,4 +1,3 @@
-import os
 import config
 import requests
 import tempfile
@@ -6,13 +5,8 @@ import logging
 import zipfile
 
 from pathlib import Path
-from sqlalchemy import create_engine
+from warehouse import connect
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
-DB_URL = os.environ["SUPABASE_DB_URL"]
 GTFS_DOWNLOAD_URL = config.GTFS_DOWNLOAD_URL
 logger = logging.getLogger(__name__)
 
@@ -28,13 +22,12 @@ def download_and_extract_gtfs(extract_to: Path) -> None:
     temp_zip_path = None
     try:
         logger.info(f"Downloading GTFS from {GTFS_DOWNLOAD_URL}")
-        resp = requests.get(GTFS_DOWNLOAD_URL, stream=True, timeout=30)
-        resp.raise_for_status()
-
-        with tempfile.NamedTemporaryFile(delete=False) as tmp_zip:
-            for chunk in resp.iter_content(chunk_size=8192):
-                tmp_zip.write(chunk)
-            temp_zip_path = Path(tmp_zip.name)
+        with requests.get(GTFS_DOWNLOAD_URL, stream=True, timeout=30) as response:
+            response.raise_for_status()
+            with tempfile.NamedTemporaryFile(delete=False) as tmp_zip:
+                temp_zip_path = Path(tmp_zip.name)
+                for chunk in response.iter_content(chunk_size=8192):
+                    tmp_zip.write(chunk)
 
         logger.info(f"Extracting to {extract_to}...")
         with zipfile.ZipFile(temp_zip_path, "r") as zf:
@@ -56,23 +49,47 @@ def load_gtfs() -> None:
         gtfs_dir = Path(tmpdir)
         download_and_extract_gtfs(gtfs_dir)
 
-        routes = pd.read_csv(find_gtfs_file(gtfs_dir, "routes.txt"))[
-            ["route_id", "route_short_name", "route_type"]
-        ]
-        trips = pd.read_csv(find_gtfs_file(gtfs_dir, "trips.txt"))[
-            ["route_id", "trip_headsign", "direction_id"]
-        ]
-        stops = pd.read_csv(find_gtfs_file(gtfs_dir, "stops.txt"))[
-            ["stop_id", "stop_name", "stop_lat", "stop_lon"]
-        ]
+        routes = pd.read_csv(
+            find_gtfs_file(gtfs_dir, "routes.txt"),
+            dtype={"route_id": str, "route_short_name": str},
+        )[["route_id", "route_short_name", "route_type"]]
+        trips = pd.read_csv(
+            find_gtfs_file(gtfs_dir, "trips.txt"), dtype={"route_id": str}
+        )[["route_id", "trip_headsign", "direction_id"]]
+        stops = pd.read_csv(
+            find_gtfs_file(gtfs_dir, "stops.txt"), dtype={"stop_id": str}
+        )[["stop_id", "stop_name", "stop_lat", "stop_lon"]]
 
-        engine = create_engine(DB_URL)
-        routes.to_sql("gtfs_routes", engine, if_exists="replace", index=False)
-        trips.to_sql("gtfs_trips", engine, if_exists="replace", index=False)
-        stops.to_sql("gtfs_stops", engine, if_exists="replace", index=False)
-        engine.dispose()
+        with connect(write=True) as conn:
+            for name, frame in [
+                ("gtfs_routes", routes),
+                ("gtfs_trips", trips),
+                ("gtfs_stops", stops),
+            ]:
+                if conn.kind == "duckdb":
+                    conn.connection.register("_gtfs_frame", frame)
+                    conn.execute(
+                        f"CREATE TABLE IF NOT EXISTS {name} AS SELECT * FROM _gtfs_frame LIMIT 0"
+                    )
+                    conn.execute(f"DELETE FROM {name}")
+                    conn.execute(
+                        f"INSERT INTO {name} BY NAME SELECT * FROM _gtfs_frame"
+                    )
+                    conn.connection.unregister("_gtfs_frame")
+                else:
+                    frame.head(0).to_sql(
+                        name, conn.connection, if_exists="append", index=False
+                    )
+                    conn.execute(f"DELETE FROM {name}")
+                    frame.to_sql(
+                        name,
+                        conn.connection,
+                        if_exists="append",
+                        index=False,
+                        chunksize=5000,
+                    )
 
-        logger.info("Loaded gtfs_routes, gtfs_trips, gtfs_stops into Supabase.")
+        logger.info("Loaded GTFS reference tables into the selected warehouse.")
 
 
 if __name__ == "__main__":

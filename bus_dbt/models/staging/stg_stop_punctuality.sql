@@ -1,4 +1,5 @@
 select
+    {{ utc_timestamp('captured_at') }} as captured_at,
     stop_id,
     trip_id,
     route_id,

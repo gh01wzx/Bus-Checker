@@ -2,7 +2,9 @@ version: 2
 
 sources:
   - name: public
+    schema: "{{ 'main' if target.type == 'duckdb' else 'public' }}"
     tables:
+      - name: bus_observations
       - name: trip_punctuality
       - name: gtfs_routes
       - name: gtfs_trips

@@ -17,6 +17,13 @@ def collect_snapshot():
     pipeline.run_pipeline()
 
 
+def build_analytics():
+    sys.path.insert(0, str(PIPELINE_PATH))
+    from build_warehouse import build
+
+    build()
+
+
 default_args = {
     "retries": 2,
     "retry_delay": datetime.timedelta(seconds=60),
@@ -35,3 +42,8 @@ with DAG(
         task_id="collect_snapshot",
         python_callable=collect_snapshot,
     )
+    transform_task = PythonOperator(
+        task_id="build_and_test_analytics",
+        python_callable=build_analytics,
+    )
+    collect_task >> transform_task

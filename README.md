@@ -1,54 +1,46 @@
 # Bus Checker
-A data pipeline that tracks Auckland bus punctuality in real time, from api call to an interactive meaningful dashboard.
 
-Live dashboard: https://bus-checker-6tnym6fnxec5a25rbwoz8d.streamlit.app/
+Auckland bus reliability dashboard using Python, SQL, dbt and Streamlit, with DuckDB locally or Postgres. Six pages cover network trends, route comparisons, stop hotspots, route reliability, historical summaries and data health.
 
-![Dashboard overview](docs/dashboard.png)
+## Run locally
 
-## What it does
-Collects real-time bus data from Auckland Transport via Airflow/Github Actions, stores it in a cloud database, transforms it with dbt, and visualises data by graph/chart via Streamlit.
+Python 3.11, PowerShell, from the project directory:
 
-**Scope:** **Auckland buses only (GTFS route_type = 3),** trains and ferries are excluded. (as they are less meaningful to track)
-
-## Architecture
-AT Realtime API ──> Python ingestion (Airflow for local/Github Actions for cloud) ──> Supabase (Postgres) ──> dbt(SQL) ──> Streamlit dashboard
-
-## Features
-- Network summary — overall on-time rate, total trips, average delay
-- On-time rate over time — hourly punctuality trend (NZ timezone)
-- Most delayed routes — ranked by average delay, with readable route names
-- Stop-level delay — which stops give more deley on a particular route
-- Direction comparison — inbound vs outbound punctuality per route
-- Heatmap — stop-level delays plotted on a map, late and early
-- **Ongoing..**
-
-## How to use it
-You can just check live dashboard: https://bus-checker-6tnym6fnxec5a25rbwoz8d.streamlit.app/
-
-If you want to play it locally:
-
-This means running the whole pipeline yourself — collecting data with your own credentials, storing it in your own Supabase, and viewing the dashboard on your machine. You'll need your own SUPABASE_DB_URL and AT_SUB_KEY (see Notes below).
-
-Download zip, use VSCode to open the folder, you also need Docker installed and opened if you wish to use Airflow locally.
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-engineering.txt
+$env:BUS_BACKEND = 'duckdb'
+.\Start-Local.ps1
 ```
-pip install -r requirements.txt
-# set SUPABASE_DB_URL and AT_SUB_KEY in .env
 
-make collect       # single collection without airflow, Docker free
-make load-gtfs     # load static GTFS data
-make airflow-up    # scheduled and repeat collections, Airflow, Docker required
-make airflow-down  # turn off Airflow
-make dbt-run       # build dbt models
-make dashboard     # launch dashboard
+With an existing populated database, the dashboard is ready to use. For a new database, set `AT_SUB_KEY` in `.env` and run these before opening it:
+
+```powershell
+.\.venv\Scripts\python.exe load_gtfs.py
+.\.venv\Scripts\python.exe pipeline.py
+.\.venv\Scripts\python.exe build_warehouse.py
 ```
-### Notes:
 
-- **SUPABASE_DB_URL** is required, it is an online storage URL, Supabase is free, get account for yourself, so data will go to your cloud storage. Link: https://supabase.com/
+To refresh data, rerun `pipeline.py` and `build_warehouse.py`. To migrate existing trip history, run `import_history.py` before the build. Finish DuckDB writes before opening or refreshing the dashboard.
 
-- **AT_SUB_KEY** is required but free to register, link: https://dev-portal.at.govt.nz/
+If PowerShell blocks the launcher, use `.\.venv\Scripts\python.exe -m streamlit run dashboard.py --server.address 127.0.0.1`.
 
-- Airflow is for local run, it collect and pump the data to cloud. `http://localhost:8080/` is the portal. Live dashboard rely on Github Actions, due to it's on free tier, so collection is less frequent.
+## Configuration
 
-- Streamlit（dashboard）has free resource for you to play. Link: https://streamlit.io/
+- `BUS_BACKEND`: `duckdb` for local use, or `postgres`.
+- `BUS_DUCKDB_PATH`: optional; defaults to `bus_data.duckdb`.
+- `AT_SUB_KEY`: required for live collection.
+- `SUPABASE_DB_URL`: required for Postgres. Keep credentials in `.env`.
 
-**Bus data © Auckland Transport, licensed under CC BY 4.0.**
+## Tests
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe tests/check_warehouse.py
+```
+
+The integration check uses a temporary database without API credentials. `ui/` contains pages, `ingestion.py` handles collection, and `bus_dbt/` contains SQL models and data tests.
+
+Metrics count reported bus delay observations, not completed journeys. On time means −60 to +300 seconds; dates use Auckland time. Local use requires no paid service. Cloud and scheduler execution have not been verified locally.
+
+Bus data © Auckland Transport, licensed under CC BY 4.0.
