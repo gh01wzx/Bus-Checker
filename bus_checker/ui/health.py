@@ -1,8 +1,8 @@
+from bus_checker.ui.data import query
 from datetime import datetime, timezone
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from data_queries import query
 
 
 def render_health():
@@ -24,7 +24,7 @@ def render_health():
             "SELECT reason, count(*) AS records FROM bus_quarantine GROUP BY reason ORDER BY records DESC"
         )
     except Exception:
-        st.info("Run python pipeline.py to initialise collection and its audit tables.")
+        st.info("Run python pipeline.py collect to initialise collection and its audit tables.")
         return
     if runs.empty:
         st.info("No collection attempts recorded yet.")
@@ -87,7 +87,7 @@ def render_health():
             )
             st.dataframe(unmatched, hide_index=True)
     except Exception:
-        st.info("Analytics have not been built yet. Run python build_warehouse.py.")
+        st.info("Analytics have not been built yet. Run python pipeline.py build.")
     st.subheader("Recent collection attempts")
     run_chart = runs.copy()
     run_chart["started_at"] = pd.to_datetime(

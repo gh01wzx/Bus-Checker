@@ -1,8 +1,7 @@
+from bus_checker.ui.data import weighted, hourly_data, route_stats, delay_distribution
 import plotly.express as px
 import streamlit as st
-from analytics import weighted
-from data_queries import hourly_data, route_stats, delay_distribution
-from ui.common import COLORS, chart, date_filter
+from bus_checker.ui.common import COLORS, chart, date_filter
 
 
 def render_comparison():

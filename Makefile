@@ -1,20 +1,20 @@
 collect:
-	python pipeline.py
+	python pipeline.py collect
 
 load-gtfs:
-	python load_gtfs.py
+	python pipeline.py load-gtfs
 
 dbt-run:
-	python build_warehouse.py
+	python pipeline.py build
 
 dbt-test:
-	python build_warehouse.py
+	python pipeline.py build
 
 test:
 	python -m unittest discover -s tests -v
 
 dbt-docs:
-	python build_warehouse.py --docs
+	python pipeline.py build --docs
 
 dashboard:
 	streamlit run dashboard.py

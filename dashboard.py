@@ -1,10 +1,10 @@
 import streamlit as st
-from ui.network import render_network
-from ui.comparison import render_comparison
-from ui.stops import render_stops
-from ui.reliability import render_routes
-from ui.overview import render_overview
-from ui.health import render_health
+from bus_checker.ui.network import render_network
+from bus_checker.ui.comparison import render_comparison
+from bus_checker.ui.stops import render_stops
+from bus_checker.ui.reliability import render_routes
+from bus_checker.ui.overview import render_overview
+from bus_checker.ui.health import render_health
 
 PAGES = {
     "Network insights": render_network,

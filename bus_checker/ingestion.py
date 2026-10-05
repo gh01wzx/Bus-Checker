@@ -1,19 +1,17 @@
-import argparse
-import json
 import logging
 import os
 import uuid
+import time
 from datetime import datetime, timezone
-from pathlib import Path
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-import config
-from feed_parser import canonical, digest, normalize, unpack_feed
-from warehouse import Connection, bootstrap, connect
+from bus_checker.parsing import canonical, digest, normalize, unpack_feed
+from bus_checker.database import Connection, bootstrap, connect
 
+TRIP_UPDATES_URL = "https://api.at.govt.nz/realtime/legacy/tripupdates"
 logger = logging.getLogger(__name__)
 
 INSERT_OBSERVATIONS = """
@@ -50,7 +48,7 @@ def fetch_feed() -> dict:
     with requests.Session() as session:
         session.mount("https://", HTTPAdapter(max_retries=retry))
         response = session.get(
-            config.TRIP_UPDATES_URL,
+            TRIP_UPDATES_URL,
             headers={"Ocp-Apim-Subscription-Key": key},
             timeout=30,
         )
@@ -242,28 +240,16 @@ def run_pipeline(payload: dict | None = None) -> dict:
         raise
 
 
-def main() -> None:
-    logging.basicConfig(level=logging.INFO)
-    parser = argparse.ArgumentParser(
-        description="Collect AT data or backfill an archived JSON feed"
-    )
-    source = parser.add_mutually_exclusive_group()
-    source.add_argument("--file", type=Path, help="Ingest a saved feed; safe to rerun")
-    source.add_argument(
-        "--replay", help="Verify replay of an archived batch; exact replay is a no-op"
-    )
-    args = parser.parse_args()
-
-    payload = None
-    if args.file:
-        payload = json.loads(args.file.read_text(encoding="utf-8"))
-    elif args.replay:
-        with connect() as connection:
-            row = connection.execute(
-                "SELECT payload FROM bus_raw_batches WHERE batch_id = :id",
-                {"id": args.replay},
-            ).fetchone()
-        if row is None:
-            parser.error("Unknown batch ID")
-        payload = json.loads(row[0])
-    print(json.dumps(run_pipeline(payload), indent=2))
+def collect_burst(bursts=5, interval_seconds=300):
+    failed = 0
+    for index in range(bursts):
+        logger.info("Burst %s/%s", index + 1, bursts)
+        try:
+            run_pipeline()
+        except Exception:
+            failed += 1
+            logger.exception("Burst %s failed, continuing", index + 1)
+        if index < bursts - 1:
+            time.sleep(interval_seconds)
+    if failed:
+        raise SystemExit(f"{failed}/{bursts} collections failed; check ingestion audit")

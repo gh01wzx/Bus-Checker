@@ -19,12 +19,12 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements-engineering.txt
-      - run: python collect_burst.py
+      - run: python pipeline.py collect --burst
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           AT_SUB_KEY: ${{ secrets.AT_SUB_KEY }}
       - name: Build and test analytics
-        run: python build_warehouse.py
+        run: python pipeline.py build
         env:
           BUS_BACKEND: postgres
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}

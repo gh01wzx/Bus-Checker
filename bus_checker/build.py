@@ -1,11 +1,10 @@
-import argparse
 import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 import yaml
-from warehouse import ROOT, backend, bootstrap, connect, duckdb_path
+from bus_checker.database import ROOT, backend, bootstrap, connect, duckdb_path
 
 
 def build(full_refresh=False, docs=False):
@@ -59,17 +58,3 @@ def build(full_refresh=False, docs=False):
         if full_refresh and not docs:
             args.append("--full-refresh")
         subprocess.run(args, env=env, check=True, cwd=ROOT)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--full-refresh", action="store_true", help="Rebuild facts after logic changes"
-    )
-    parser.add_argument(
-        "--docs",
-        action="store_true",
-        help="Generate dbt lineage and column documentation",
-    )
-    args = parser.parse_args()
-    build(args.full_refresh, args.docs)

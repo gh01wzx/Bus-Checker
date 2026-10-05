@@ -1,11 +1,9 @@
+from bus_checker.ui.data import weighted, composition, hourly_data
 from datetime import timedelta
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from analytics import weighted
-from analytics import composition
-from data_queries import hourly_data
-from ui.common import COLORS, chart, date_filter, show_heatmap
+from bus_checker.ui.common import COLORS, chart, date_filter, show_heatmap
 
 
 def render_network():

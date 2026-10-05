@@ -1,6 +1,6 @@
 import plotly.express as px
 import streamlit as st
-from warehouse import read_frame
+from bus_checker.database import read_frame
 
 
 @st.cache_data(ttl=60)
@@ -17,7 +17,7 @@ def load_data():
         return tuple(read_frame(sql) for sql in queries)
     except Exception:
         st.info(
-            "Load GTFS reference data, collect observations, then run python build_warehouse.py."
+            "Load GTFS reference data, collect observations, then run python pipeline.py build."
         )
         st.stop()
 

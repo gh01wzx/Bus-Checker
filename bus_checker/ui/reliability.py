@@ -1,8 +1,7 @@
+from bus_checker.ui.data import weighted, query
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from analytics import weighted
-from data_queries import query
 
 
 def render_routes():
@@ -16,7 +15,7 @@ def render_routes():
         ).iloc[0]
     except Exception:
         st.info(
-            "Run collection, then python build_warehouse.py to enable route analysis."
+            "Run collection, then python pipeline.py build to enable route analysis."
         )
         return
     if pd.isna(bounds.first_day):

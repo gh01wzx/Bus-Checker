@@ -1,8 +1,7 @@
+from bus_checker.ui.data import weighted, query
 import plotly.express as px
 import streamlit as st
-from analytics import weighted
-from data_queries import query
-from ui.common import chart, date_filter
+from bus_checker.ui.common import chart, date_filter
 
 
 def render_stops():

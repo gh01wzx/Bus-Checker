@@ -1,9 +1,8 @@
+from bus_checker.ui.data import heatmap_data, query
 from datetime import timedelta
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from analytics import heatmap_data
-from data_queries import query
 
 COLORS = {"Early": "#6366f1", "On time": "#10b981", "Late": "#f97316"}
 DAY_NAMES = [
@@ -32,7 +31,7 @@ def date_filter(table, key):
             f"SELECT min(observation_date) AS first_day, max(observation_date) AS last_day FROM {table}"
         ).iloc[0]
     except Exception:
-        st.info("Analytics are not ready yet. Run python build_warehouse.py.")
+        st.info("Analytics are not ready yet. Run python pipeline.py build.")
         return None
     if pd.isna(bounds.first_day):
         st.info("No observations available for this analysis yet.")

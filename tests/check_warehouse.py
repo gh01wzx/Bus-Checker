@@ -1,13 +1,13 @@
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from build_warehouse import build
-from ingestion import run_pipeline
-from warehouse import connect, read_frame
+from bus_checker.ingestion import run_pipeline
+from bus_checker.database import connect, read_frame
 from test_ingestion import feed
 
 
@@ -31,7 +31,7 @@ def check():
             conn.execute(
                 "INSERT INTO gtfs_stops VALUES ('001','Test stop',-36.8,174.7)"
             )
-        build()
+        subprocess.run([sys.executable, str(ROOT / "pipeline.py"), "build"], check=True)
         assert (
             read_frame("SELECT count(*) AS n FROM fct_trip_observation").iloc[0].n == 1
         )
@@ -47,7 +47,7 @@ def check():
         assert actual.local_hour == expected.hour
         run_pipeline(feed())
         run_pipeline(feed(timestamp=1700000000, trip_id="late", delay=400))
-        build()
+        subprocess.run([sys.executable, str(ROOT / "pipeline.py"), "build"], check=True)
         assert (
             read_frame("SELECT count(*) AS n FROM fct_trip_observation").iloc[0].n == 2
         )

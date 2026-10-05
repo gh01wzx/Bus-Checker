@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from load_gtfs import download_and_extract_gtfs
+from bus_checker.reference import download_and_extract_gtfs
 
 
 class GtfsDownloadTests(unittest.TestCase):
@@ -24,12 +24,12 @@ class GtfsDownloadTests(unittest.TestCase):
         response.__enter__.return_value = response
         response.iter_content.side_effect = broken_stream
         with tempfile.TemporaryDirectory() as destination:
-            with patch("load_gtfs.requests.get", return_value=response):
+            with patch("bus_checker.reference.requests.get", return_value=response):
                 with patch(
-                    "load_gtfs.tempfile.NamedTemporaryFile",
+                    "bus_checker.reference.tempfile.NamedTemporaryFile",
                     side_effect=track_temporary_file,
                 ):
-                    with self.assertLogs("load_gtfs", level="ERROR"):
+                    with self.assertLogs("bus_checker.reference", level="ERROR"):
                         with self.assertRaises(OSError):
                             download_and_extract_gtfs(Path(destination))
         self.assertEqual(len(created_files), 1)

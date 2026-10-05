@@ -12,14 +12,14 @@ def collect_snapshot():
     if not PIPELINE_PATH.exists():
         raise ImportError(f"Pipeline path not found: {PIPELINE_PATH}")
     sys.path.insert(0, str(PIPELINE_PATH))
-    import pipeline
+    from bus_checker.ingestion import run_pipeline
 
-    pipeline.run_pipeline()
+    run_pipeline()
 
 
 def build_analytics():
     sys.path.insert(0, str(PIPELINE_PATH))
-    from build_warehouse import build
+    from bus_checker.build import build
 
     build()
 

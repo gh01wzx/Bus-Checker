@@ -1,10 +1,14 @@
+import json
 import os
+from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from ingestion import run_pipeline
-from warehouse import connect, read_frame
+from bus_checker.ingestion import collect_burst, run_pipeline
+from bus_checker.database import ROOT, connect, read_frame
 
 
 def feed(timestamp=1783396800, delay=90, trip_id="trip-1"):
@@ -52,6 +56,58 @@ class IngestionTests(unittest.TestCase):
 
     def count(self, table):
         return int(read_frame(f"SELECT count(*) AS n FROM {table}").iloc[0].n)
+
+    def run_command(self, *arguments):
+        return subprocess.run(
+            [sys.executable, str(ROOT / "pipeline.py"), *arguments],
+            cwd=self.directory.name,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_cli_file_import_and_replay_are_repeatable(self):
+        archive = Path(self.directory.name) / "feed.json"
+        archive.write_text(json.dumps(feed()), encoding="utf-8")
+        first = self.run_command("collect", "--file", str(archive))
+        self.assertEqual(first.returncode, 0, first.stderr)
+        result = json.loads(first.stdout)
+        self.assertEqual(result["accepted_rows"], 2)
+        replay = self.run_command("collect", "--replay", result["batch_id"])
+        self.assertEqual(replay.returncode, 0, replay.stderr)
+        self.assertEqual(json.loads(replay.stdout)["status"], "duplicate")
+        legacy = self.run_command(f"--file={archive}")
+        self.assertEqual(legacy.returncode, 0, legacy.stderr)
+        self.assertEqual(json.loads(legacy.stdout)["status"], "duplicate")
+        self.assertEqual(self.count("bus_observations"), 2)
+
+    def test_cli_rejects_unknown_batch_and_conflicting_sources(self):
+        run_pipeline(feed())
+        unknown = self.run_command("collect", "--replay", "missing")
+        self.assertEqual(unknown.returncode, 2)
+        self.assertIn("Unknown batch ID", unknown.stderr)
+        conflicting = self.run_command("collect", "--burst", "--file", "feed.json")
+        self.assertEqual(conflicting.returncode, 2)
+        self.assertEqual(self.count("bus_ingestion_runs"), 1)
+
+    def test_burst_reports_failure_after_remaining_attempts(self):
+        with patch(
+            "bus_checker.ingestion.run_pipeline",
+            side_effect=[{}, RuntimeError("interrupted"), {}],
+        ) as collect:
+            with patch("bus_checker.ingestion.time.sleep") as sleep:
+                with self.assertLogs("bus_checker.ingestion", level="ERROR"):
+                    with self.assertRaisesRegex(SystemExit, "1/3"):
+                        collect_burst(bursts=3, interval_seconds=1)
+        self.assertEqual(collect.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_burst_succeeds_without_waiting_after_last_attempt(self):
+        with patch("bus_checker.ingestion.run_pipeline") as collect:
+            with patch("bus_checker.ingestion.time.sleep") as sleep:
+                collect_burst(bursts=1)
+        collect.assert_called_once_with()
+        sleep.assert_not_called()
 
     def test_replay_does_not_duplicate_fact_or_legacy_tables(self):
         self.assertEqual(run_pipeline(feed())["accepted_rows"], 2)
@@ -103,7 +159,7 @@ class IngestionTests(unittest.TestCase):
 
     def test_failure_rolls_back_batch_and_legacy_writes(self):
         run_pipeline(feed())
-        from warehouse import Connection
+        from bus_checker.database import Connection
 
         original = Connection.many
 
@@ -133,7 +189,7 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual(result["rejected_rows"], 2)
 
     def test_history_import_is_repeatable_and_does_not_append_legacy(self):
-        from import_history import import_history
+        from bus_checker.reference import import_history
 
         run_pipeline(feed())
         count = self.count("trip_punctuality")

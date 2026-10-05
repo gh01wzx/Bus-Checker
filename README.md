@@ -16,12 +16,12 @@ $env:BUS_BACKEND = 'duckdb'
 With an existing populated database, the dashboard is ready to use. For a new database, set `AT_SUB_KEY` in `.env` and run these before opening it:
 
 ```powershell
-.\.venv\Scripts\python.exe load_gtfs.py
-.\.venv\Scripts\python.exe pipeline.py
-.\.venv\Scripts\python.exe build_warehouse.py
+.\.venv\Scripts\python.exe pipeline.py load-gtfs
+.\.venv\Scripts\python.exe pipeline.py collect
+.\.venv\Scripts\python.exe pipeline.py build
 ```
 
-To refresh data, rerun `pipeline.py` and `build_warehouse.py`. To migrate existing trip history, run `import_history.py` before the build. Finish DuckDB writes before opening or refreshing the dashboard.
+To refresh data, rerun `pipeline.py collect` and `pipeline.py build`. To migrate existing trip history, run `pipeline.py import-history` before the build. Finish DuckDB writes before opening or refreshing the dashboard.
 
 If PowerShell blocks the launcher, use `.\.venv\Scripts\python.exe -m streamlit run dashboard.py --server.address 127.0.0.1`.
 
@@ -39,7 +39,7 @@ If PowerShell blocks the launcher, use `.\.venv\Scripts\python.exe -m streamlit 
 .\.venv\Scripts\python.exe tests/check_warehouse.py
 ```
 
-The integration check uses a temporary database without API credentials. `ui/` contains pages, `ingestion.py` handles collection, and `bus_dbt/` contains SQL models and data tests.
+The integration check uses a temporary database without API credentials. `dashboard.py` opens the dashboard; `pipeline.py` runs data commands. Internal Python code lives in `bus_checker/`, pages in `bus_checker/ui/`, and SQL models in `bus_dbt/`. Run `python pipeline.py --help` for all data commands.
 
 Metrics count reported bus delay observations, not completed journeys. On time means −60 to +300 seconds; dates use Auckland time. Local use requires no paid service. Cloud and scheduler execution have not been verified locally.
 

@@ -1,6 +1,6 @@
 import unittest
 import pandas as pd
-from analytics import heatmap_data, composition
+from bus_checker.ui.data import heatmap_data, composition
 
 
 class ChartSemanticsTests(unittest.TestCase):

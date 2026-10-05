@@ -1,13 +1,15 @@
-import config
-import requests
-import tempfile
 import logging
+import tempfile
 import zipfile
-
 from pathlib import Path
-from warehouse import connect
 
-GTFS_DOWNLOAD_URL = config.GTFS_DOWNLOAD_URL
+import pandas as pd
+import requests
+
+from bus_checker.database import bootstrap, connect, read_frame
+from bus_checker.ingestion import ingest_payload
+
+GTFS_DOWNLOAD_URL = "https://gtfs.at.govt.nz/gtfs.zip"
 logger = logging.getLogger(__name__)
 
 
@@ -43,8 +45,6 @@ def download_and_extract_gtfs(extract_to: Path) -> None:
 
 
 def load_gtfs() -> None:
-    import pandas as pd
-
     with tempfile.TemporaryDirectory() as tmpdir:
         gtfs_dir = Path(tmpdir)
         download_and_extract_gtfs(gtfs_dir)
@@ -92,8 +92,56 @@ def load_gtfs() -> None:
         logger.info("Loaded GTFS reference tables into the selected warehouse.")
 
 
-if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+def import_history():
+    with connect(write=True) as conn:
+        bootstrap(conn)
+    frame = read_frame(
+        """SELECT p.captured_at, p.route_id, p.trip_id, p.delay, p.direction_id
+        FROM trip_punctuality p WHERE NOT EXISTS (
+            SELECT 1 FROM bus_observations o WHERE o.observation_type='trip'
+            AND o.captured_at=p.captured_at AND o.route_id=p.route_id
+            AND o.trip_id=p.trip_id AND o.delay=p.delay
+            AND o.direction_id IS NOT DISTINCT FROM p.direction_id)"""
     )
-    load_gtfs()
+    if frame.empty:
+        print("No trip history to import.")
+        return
+    frame["captured_at"] = pd.to_datetime(frame["captured_at"], utc=True)
+    accepted, rejected = 0, 0
+    for captured, group in frame.groupby("captured_at", sort=True):
+        entities = []
+        for row in group.itertuples(index=False):
+            entities.append(
+                {
+                    "trip_update": {
+                        "trip": {
+                            "route_id": (
+                                None if pd.isna(row.route_id) else str(row.route_id)
+                            ),
+                            "trip_id": (
+                                None if pd.isna(row.trip_id) else str(row.trip_id)
+                            ),
+                            "direction_id": (
+                                None
+                                if pd.isna(row.direction_id)
+                                else int(row.direction_id)
+                            ),
+                        },
+                        "delay": None if pd.isna(row.delay) else int(row.delay),
+                    }
+                }
+            )
+        payload = {
+            "header": {
+                "timestamp": int(captured.timestamp()),
+                "historical_capture": captured.isoformat(),
+            },
+            "entity": entities,
+        }
+        result = ingest_payload(payload, write_legacy=False)
+        accepted += result["accepted_rows"]
+        rejected += result["rejected_rows"]
+    print(
+        f"History import complete: {accepted} new observations; {rejected} rejected. Legacy tables unchanged."
+    )
+
