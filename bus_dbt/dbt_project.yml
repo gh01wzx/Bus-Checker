@@ -13,12 +13,6 @@ snapshot-paths: ["snapshots"]
 clean-targets:
   - "target"
   - "dbt_packages"
-
-
-
-models:
-  bus_dbt:
-
 vars:
   on_time_early: -60
   on_time_late: 300
