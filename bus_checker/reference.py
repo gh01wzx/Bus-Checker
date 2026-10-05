@@ -109,25 +109,27 @@ def import_history():
     frame["captured_at"] = pd.to_datetime(frame["captured_at"], utc=True)
     accepted, rejected = 0, 0
     for captured, group in frame.groupby("captured_at", sort=True):
+        if not isinstance(captured, pd.Timestamp):
+            raise ValueError("Invalid historical capture timestamp")
         entities = []
-        for row in group.itertuples(index=False):
+        for row in group.to_dict(orient="records"):
             entities.append(
                 {
                     "trip_update": {
                         "trip": {
                             "route_id": (
-                                None if pd.isna(row.route_id) else str(row.route_id)
+                                None if pd.isna(row["route_id"]) else str(row["route_id"])
                             ),
                             "trip_id": (
-                                None if pd.isna(row.trip_id) else str(row.trip_id)
+                                None if pd.isna(row["trip_id"]) else str(row["trip_id"])
                             ),
                             "direction_id": (
                                 None
-                                if pd.isna(row.direction_id)
-                                else int(row.direction_id)
+                                if pd.isna(row["direction_id"])
+                                else int(row["direction_id"])
                             ),
                         },
-                        "delay": None if pd.isna(row.delay) else int(row.delay),
+                        "delay": None if pd.isna(row["delay"]) else int(row["delay"]),
                     }
                 }
             )
@@ -144,4 +146,3 @@ def import_history():
     print(
         f"History import complete: {accepted} new observations; {rejected} rejected. Legacy tables unchanged."
     )
-

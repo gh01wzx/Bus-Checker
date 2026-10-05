@@ -33,7 +33,7 @@ def render_stops():
     route = left.selectbox(
         "Filter by route",
         ["All routes"] + labels.route_id.tolist(),
-        format_func=lambda value: route_names.get(value, value),
+        format_func=lambda value: route_names.get(value, str(value)),
     )
     minimum = right.number_input("Minimum stop observations", min_value=1, value=10)
     if route != "All routes":
@@ -109,7 +109,9 @@ def render_stops():
         )
     )
     stop = st.selectbox(
-        "Inspect a stop", eligible.stop_id.tolist(), format_func=names.get
+        "Inspect a stop",
+        eligible.stop_id.tolist(),
+        format_func=lambda value: names.get(value, str(value)),
     )
     selected = data[data.stop_id == stop]
     daily = weighted(selected, ["observation_date"])

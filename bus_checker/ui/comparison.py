@@ -30,7 +30,7 @@ def render_comparison():
         options.route_id.tolist(),
         default=options.route_id.head(3).tolist(),
         max_selections=6,
-        format_func=names.get,
+        format_func=lambda value: names.get(value, str(value)),
     )
     if not routes:
         st.info("Select at least one route to compare.")

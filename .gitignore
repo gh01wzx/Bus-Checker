@@ -14,3 +14,4 @@ gtfs/*
 work/
 *.duckdb.wal
 profiles.yml
+.vscode/settings.json

@@ -9,9 +9,10 @@ from unittest.mock import patch
 
 from bus_checker.ingestion import collect_burst, run_pipeline
 from bus_checker.database import ROOT, connect, read_frame
+from bus_checker.reference import import_history
 
 
-def feed(timestamp=1783396800, delay=90, trip_id="trip-1"):
+def feed(timestamp: int = 1783396800, delay: int | str = 90, trip_id: str = "trip-1"):
     return {
         "response": {
             "header": {"timestamp": timestamp},
@@ -189,8 +190,6 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual(result["rejected_rows"], 2)
 
     def test_history_import_is_repeatable_and_does_not_append_legacy(self):
-        from bus_checker.reference import import_history
-
         run_pipeline(feed())
         count = self.count("trip_punctuality")
         import_history()
@@ -203,6 +202,23 @@ class IngestionTests(unittest.TestCase):
         import_history()
         self.assertEqual(self.count("bus_observations"), first)
         self.assertEqual(self.count("trip_punctuality"), count)
+
+    def test_history_import_preserves_missing_direction(self):
+        payload = feed()
+        del payload["response"]["entity"][0]["trip_update"]["trip"]["direction_id"]
+        run_pipeline(payload)
+        with connect(write=True) as conn:
+            conn.execute("DELETE FROM bus_observations")
+            conn.execute("DELETE FROM bus_raw_batches")
+        import_history()
+        imported = read_frame(
+            "SELECT route_id, delay, direction_id IS NULL AS unknown_direction "
+            "FROM bus_observations"
+        )
+        self.assertEqual(len(imported), 1)
+        self.assertEqual(imported.iloc[0].route_id, "101")
+        self.assertEqual(imported.iloc[0].delay, 90)
+        self.assertTrue(imported.iloc[0].unknown_direction)
 
 
 if __name__ == "__main__":

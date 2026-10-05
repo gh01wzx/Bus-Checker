@@ -32,15 +32,17 @@ def unpack_feed(payload: dict) -> tuple[dict, datetime]:
     return feed, captured_at
 
 
-def integer(value: Any, name: str, optional: bool = False) -> int | None:
-    if value is None and optional:
-        return None
+def integer(value: Any, name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, (int, str)):
         raise ValueError(f"invalid_{name}")
     try:
         return int(value)
     except (ValueError, TypeError):
         raise ValueError(f"invalid_{name}") from None
+
+
+def optional_integer(value: Any, name: str) -> int | None:
+    return None if value is None else integer(value, name)
 
 
 def identifier(value: Any, name: str) -> str:
@@ -57,9 +59,7 @@ def trip_fields(trip: dict) -> dict:
     fields = {
         "route_id": identifier(trip.get("route_id"), "route_id"),
         "trip_id": identifier(trip.get("trip_id"), "trip_id"),
-        "direction_id": integer(
-            trip.get("direction_id"), "direction_id", optional=True
-        ),
+        "direction_id": optional_integer(trip.get("direction_id"), "direction_id"),
     }
     if fields["direction_id"] not in (None, 0, 1):
         raise ValueError("invalid_direction_id")
@@ -124,15 +124,15 @@ def entity_candidates(entity: dict) -> tuple[list, list]:
 
 
 def validate_observation(candidate: dict) -> dict:
-    candidate["delay"] = integer(candidate["delay"], "delay")
-    if abs(candidate["delay"]) > MAX_DELAY_SECONDS:
+    delay = integer(candidate["delay"], "delay")
+    candidate["delay"] = delay
+    if abs(delay) > MAX_DELAY_SECONDS:
         raise ValueError("delay_outside_24h_contract")
     if candidate["observation_type"] == "stop":
         candidate["stop_id"] = identifier(candidate["stop_id"], "stop_id")
-        candidate["stop_sequence"] = integer(
-            candidate["stop_sequence"], "stop_sequence", optional=True
-        )
-        if candidate["stop_sequence"] is not None and candidate["stop_sequence"] < 0:
+        stop_sequence = optional_integer(candidate["stop_sequence"], "stop_sequence")
+        candidate["stop_sequence"] = stop_sequence
+        if stop_sequence is not None and stop_sequence < 0:
             raise ValueError("invalid_stop_sequence")
     return candidate
 

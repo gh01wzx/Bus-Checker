@@ -2,8 +2,8 @@ import datetime
 import sys
 from pathlib import Path
 
-from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.sdk import DAG
+from airflow.providers.standard.operators.python import PythonOperator
 
 PIPELINE_PATH = Path("/opt/airflow/bus-checker")
 
@@ -46,4 +46,4 @@ with DAG(
         task_id="build_and_test_analytics",
         python_callable=build_analytics,
     )
-    collect_task >> transform_task
+    collect_task.set_downstream(transform_task)
