@@ -8,7 +8,7 @@ Python 3.11, PowerShell, from the project directory:
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-engineering.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 $env:BUS_BACKEND = 'duckdb'
 .\Start-Local.ps1
 ```
