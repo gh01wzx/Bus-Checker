@@ -15,3 +15,9 @@ work/
 *.duckdb.wal
 profiles.yml
 .vscode/settings.json
+
+.setup-complete
+.env.*
+!.env.example
+.downloads/
+.DS_Store

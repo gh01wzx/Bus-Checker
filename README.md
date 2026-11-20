@@ -2,6 +2,10 @@
 
 Auckland bus reliability dashboard built with Python, dbt and Streamlit. Six pages explore network trends, route comparisons, stop hotspots, route reliability, historical summaries and data health.
 
+## Restore on Windows or Mac
+
+Run `Setup.cmd` (Windows) or `bash Setup.command` (Mac), then use `Start.cmd` or `bash Start.command`. See [MIGRATION.md](MIGRATION.md). Setup downloads public reference data and builds an empty local warehouse; old delay observations are not in Git. Fill in `.env` with your own API key, then collect fresh data with `.venv/Scripts/python pipeline.py collect` on Windows or `.venv/bin/python pipeline.py collect` on Mac. Rebuild with `pipeline.py build` after collecting.
+
 ## First-time setup
 
 Requires Python 3.11 and GNU Make. Docker is optional for some functionalities, but it is required if you wish to run Airflow locally to collect data into your local db.
