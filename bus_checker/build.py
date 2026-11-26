@@ -4,7 +4,7 @@ import sys
 import tempfile
 from pathlib import Path
 import yaml
-from bus_checker.database import ROOT, backend, bootstrap, connect, duckdb_path
+from bus_checker.database import ROOT, backend, bootstrap, connect, duckdb_path, postgres_url
 
 
 def build(full_refresh=False, docs=False):
@@ -20,9 +20,7 @@ def build(full_refresh=False, docs=False):
             "threads": 1,
         }
     else:
-        from sqlalchemy.engine import make_url
-
-        url = make_url(os.environ["SUPABASE_DB_URL"])
+        url = postgres_url()
         env.update(
             BUS_DBT_HOST=url.host or "localhost",
             BUS_DBT_PORT=str(url.port or 5432),
@@ -39,7 +37,7 @@ def build(full_refresh=False, docs=False):
             "dbname": "{{ env_var('BUS_DBT_DATABASE') }}",
             "schema": "public",
             "threads": 1,
-            "sslmode": url.query.get("sslmode", "require"),
+            "sslmode": url.query.get("sslmode", os.getenv("PGSSLMODE", "prefer")),
         }
     with tempfile.TemporaryDirectory(prefix="bus-dbt-") as temporary:
         Path(temporary, "profiles.yml").write_text(

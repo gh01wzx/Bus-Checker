@@ -1,49 +1,31 @@
-import datetime
-import sys
-from pathlib import Path
+import os
+from datetime import datetime, timedelta, timezone
 
+from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import DAG
-from airflow.providers.standard.operators.python import PythonOperator
 
-PIPELINE_PATH = Path("/opt/airflow/bus-checker")
-
-
-def collect_snapshot():
-    if not PIPELINE_PATH.exists():
-        raise ImportError(f"Pipeline path not found: {PIPELINE_PATH}")
-    sys.path.insert(0, str(PIPELINE_PATH))
-    from bus_checker.ingestion import run_pipeline
-
-    run_pipeline()
-
-
-def build_analytics():
-    sys.path.insert(0, str(PIPELINE_PATH))
-    from bus_checker.build import build
-
-    build()
-
-
-default_args = {
-    "retries": 2,
-    "retry_delay": datetime.timedelta(seconds=60),
-}
+PIPELINE = "/opt/airflow/bus-venv/bin/python /opt/airflow/bus-checker/pipeline.py"
 
 with DAG(
     dag_id="bus_pipeline",
-    start_date=datetime.datetime(2025, 1, 1),
+    start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
     schedule="*/5 * * * *",
     catchup=False,
     max_active_runs=1,
-    tags=["bus"],
-    default_args=default_args,
+    default_args={"retries": 2, "retry_delay": timedelta(minutes=1),
+                  "execution_timeout": timedelta(minutes=25)},
+    tags=["auckland", "local"],
 ) as dag:
-    collect_task = PythonOperator(
-        task_id="collect_snapshot",
-        python_callable=collect_snapshot,
+    collect = BashOperator(task_id="collect_snapshot", bash_command=f"{PIPELINE} collect")
+    reference = BashOperator(
+        task_id="refresh_reference_if_due", bash_command=f"{PIPELINE} load-gtfs --if-stale"
     )
-    transform_task = PythonOperator(
-        task_id="build_and_test_analytics",
-        python_callable=build_analytics,
+    transform = BashOperator(
+        task_id="build_and_test_analytics", bash_command=f"{PIPELINE} build"
     )
-    collect_task.set_downstream(transform_task)
+    collect >> reference >> transform
+    if os.environ.get("BUS_BACKEND", "postgres") == "duckdb":
+        publish = BashOperator(
+            task_id="publish_dashboard_snapshot", bash_command=f"{PIPELINE} publish-snapshot"
+        )
+        transform >> publish

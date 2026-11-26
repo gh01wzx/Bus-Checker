@@ -18,3 +18,43 @@ jobs:
       - run: npx --yes pyright@1.1.414 dashboard.py pipeline.py bus_checker tests
       - run: python -m unittest discover -s tests -v
       - run: python tests/check_warehouse.py
+
+  scheduled-stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [postgres, duckdb]
+    env:
+      BUS_BACKEND: ${{ matrix.backend }}
+      COMPOSE_FILE: compose.yaml:tests/compose.fixture.yaml
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up -d --build --wait --wait-timeout 300
+      - name: Run the DAG through the scheduler
+        shell: bash
+        run: |
+          set -eu
+          run_id=ci_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}
+          for i in {1..30}; do
+            if docker compose exec -T airflow airflow dags trigger --run-id "$run_id" bus_pipeline; then break; fi
+            sleep 5
+          done
+          for i in {1..75}; do
+            state=$(docker compose exec -T airflow airflow dags state bus_pipeline "$run_id" | tail -1)
+            case "$state" in
+              success) exit 0 ;;
+              failed) exit 1 ;;
+            esac
+            sleep 5
+          done
+          exit 1
+      - name: Verify warehouse and dashboard through the reader connection
+        run: docker compose exec -T dashboard /opt/airflow/bus-venv/bin/python - < tests/check_local_stack.py
+      - if: failure()
+        run: |
+          docker compose logs --tail=60 airflow
+          docker compose exec -T airflow sh -c 'find /opt/airflow/logs -path "*/dag_id=bus_pipeline/*" -type f -name "*.log" -exec tail -20 {} \;'
+      - if: always()
+        run: docker compose down

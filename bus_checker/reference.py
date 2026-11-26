@@ -1,4 +1,5 @@
 import logging
+import os
 import tempfile
 import zipfile
 from pathlib import Path
@@ -23,8 +24,9 @@ def find_gtfs_file(base_dir: Path, filename: str) -> Path:
 def download_and_extract_gtfs(extract_to: Path) -> None:
     temp_zip_path = None
     try:
-        logger.info(f"Downloading GTFS from {GTFS_DOWNLOAD_URL}")
-        with requests.get(GTFS_DOWNLOAD_URL, stream=True, timeout=30) as response:
+        url = os.getenv("AT_GTFS_URL", GTFS_DOWNLOAD_URL)
+        logger.info("Downloading GTFS reference data")
+        with requests.get(url, stream=True, timeout=30) as response:
             response.raise_for_status()
             with tempfile.NamedTemporaryFile(delete=False) as tmp_zip:
                 temp_zip_path = Path(tmp_zip.name)
@@ -44,7 +46,17 @@ def download_and_extract_gtfs(extract_to: Path) -> None:
             temp_zip_path.unlink(missing_ok=True)
 
 
-def load_gtfs() -> None:
+def load_gtfs(*, if_stale: bool = False) -> None:
+    with connect(write=True) as conn:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS bus_reference_refresh "
+            "(source VARCHAR PRIMARY KEY, refreshed_at TIMESTAMP WITH TIME ZONE NOT NULL)"
+        )
+        if if_stale and conn.execute(
+            "SELECT 1 FROM bus_reference_refresh WHERE source = 'gtfs' "
+            "AND refreshed_at > CURRENT_TIMESTAMP - interval '7 days'"
+        ).fetchone():
+            return
     with tempfile.TemporaryDirectory() as tmpdir:
         gtfs_dir = Path(tmpdir)
         download_and_extract_gtfs(gtfs_dir)
@@ -89,6 +101,10 @@ def load_gtfs() -> None:
                         chunksize=5000,
                     )
 
+            conn.execute("DELETE FROM bus_reference_refresh WHERE source = 'gtfs'")
+            conn.execute(
+                "INSERT INTO bus_reference_refresh VALUES ('gtfs', CURRENT_TIMESTAMP)"
+            )
         logger.info("Loaded GTFS reference tables into the selected warehouse.")
 
 

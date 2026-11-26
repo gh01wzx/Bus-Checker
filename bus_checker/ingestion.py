@@ -48,7 +48,7 @@ def fetch_feed() -> dict:
     with requests.Session() as session:
         session.mount("https://", HTTPAdapter(max_retries=retry))
         response = session.get(
-            TRIP_UPDATES_URL,
+            os.getenv("AT_TRIP_UPDATES_URL", TRIP_UPDATES_URL),
             headers={"Ocp-Apim-Subscription-Key": key},
             timeout=30,
         )

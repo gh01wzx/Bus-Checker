@@ -33,7 +33,7 @@ dashboard:
 	$(PYTHON) -m streamlit run dashboard.py --server.address 127.0.0.1
 
 airflow-up:
-	cd airflow && docker compose up -d
+	docker compose up --build -d
 
 airflow-down:
-	cd airflow && docker compose down
+	docker compose down

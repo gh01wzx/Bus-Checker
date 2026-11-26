@@ -1,0 +1,91 @@
+name: bus-checker-local
+
+x-application: &application
+  image: bus-checker-local:airflow-3.2.2
+  pull_policy: never
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+x-warehouse: &warehouse
+  BUS_BACKEND: ${BUS_BACKEND:-postgres}
+  PGHOST: postgres
+  PGDATABASE: bus
+  PGSSLMODE: disable
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${LOCAL_PG_ADMIN_PASSWORD:-local-bootstrap}
+      BUS_WRITER_PASSWORD: ${LOCAL_BUS_WRITER_PASSWORD:-local-writer}
+      BUS_READER_PASSWORD: ${LOCAL_BUS_READER_PASSWORD:-local-reader}
+      AIRFLOW_DB_PASSWORD: ${LOCAL_AIRFLOW_DB_PASSWORD:-local-airflow}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./airflow/init-databases.sql:/docker-entrypoint-initdb.d/10-bus.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  airflow:
+    <<: *application
+    build: .
+    command: standalone
+    environment:
+      <<: *warehouse
+      PGUSER: bus_writer
+      PGPASSWORD: ${LOCAL_BUS_WRITER_PASSWORD:-local-writer}
+      AT_SUB_KEY: ${AT_SUB_KEY:-}
+      BUS_DUCKDB_PATH: /opt/airflow/warehouse/bus_data.duckdb
+      BUS_SNAPSHOT_DIR: /opt/airflow/published
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://orchestrator:${LOCAL_AIRFLOW_DB_PASSWORD:-local-airflow}@postgres/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__PARALLELISM: "2"
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/state/passwords.json
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://localhost:8080/execution/
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - airflow-logs:/opt/airflow/logs
+      - airflow-state:/opt/airflow/state
+      - duckdata:/opt/airflow/warehouse
+      - snapshots:/opt/airflow/published
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  dashboard:
+    <<: *application
+    entrypoint: ["/opt/airflow/bus-venv/bin/python", "-m", "streamlit"]
+    command: ["run", "dashboard.py", "--server.address=0.0.0.0", "--browser.gatherUsageStats=false"]
+    environment:
+      <<: *warehouse
+      PGUSER: bus_reader
+      PGPASSWORD: ${LOCAL_BUS_READER_PASSWORD:-local-reader}
+      BUS_DUCKDB_PATH: /opt/airflow/published/bus_data.duckdb
+    ports:
+      - "127.0.0.1:8501:8501"
+    volumes:
+      - snapshots:/opt/airflow/published:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8501/_stcore/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+  duckdata:
+  snapshots:
+  airflow-logs:
+  airflow-state:

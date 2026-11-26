@@ -1,89 +1,52 @@
 # Bus Checker
 
-Auckland bus reliability dashboard built with Python, dbt and Streamlit. Six pages explore network trends, route comparisons, stop hotspots, route reliability, historical summaries and data health.
+Bus Checker follows Auckland Transport delay predictions from the realtime API to six local Streamlit pages. Airflow schedules ingestion every five minutes. Choose **PostgreSQL** or **DuckDB** when starting Docker Compose. Both use the same parser, dbt models, data tests and dashboard.
 
-## Restore on Windows or Mac
+## Run locally
 
-Run `Setup.cmd` (Windows) or `bash Setup.command` (Mac), then use `Start.cmd` or `bash Start.command`. See [MIGRATION.md](MIGRATION.md). Setup downloads public reference data and builds an empty local warehouse; old delay observations are not in Git. Fill in `.env` with your own API key, then collect fresh data with `.venv/Scripts/python pipeline.py collect` on Windows or `.venv/bin/python pipeline.py collect` on Mac. Rebuild with `pipeline.py build` after collecting.
-
-## First-time setup
-
-Requires Python 3.11 and GNU Make. Docker is optional for some functionalities, but it is required if you wish to run Airflow locally to collect data into your local db.
-Run all commands from the project directory.
-The Makefile uses `.venv` directly, so activation is unnecessary.
-
-### Set up
-This step uses Python to install all necessary dependencies listed in [requirements.txt](requirements.txt).
+Install Docker Desktop with Linux containers and run the following from the repository root in PowerShell. On first use, create `.env` with `Copy-Item .env.example .env` if it does not already exist. Set `AT_SUB_KEY` to your Auckland Transport subscription key. The Docker default warehouse is PostgreSQL.
 
 ```powershell
-cd Bus-Checker
-make setup
+$env:BUS_BACKEND = "postgres"   # or "duckdb"
+docker compose up --build -d
+docker compose ps
 ```
 
-If your Python command is `python3`, use `make setup SYSTEM_PYTHON=python3`.
+Open [Airflow](http://localhost:8080) and [Streamlit](http://localhost:8501). The Airflow user is `admin`. Retrieve the locally generated password with `docker compose exec airflow cat /opt/airflow/state/passwords.json`. The `bus_pipeline` DAG starts enabled. On first collection it downloads the public GTFS reference feed. The dashboard fills after the first successful build.
 
-Create a `.env` file in the project directory and set up your local db and `AT_SUB_KEY`.
+For a permanent backend selection set `BUS_BACKEND` in the root `.env`. A shell setting overrides the file. Switch after the current DAG run finishes with `docker compose down`, then select the other backend and start again. Each warehouse keeps its own history in its Docker volume. Switching back resumes that warehouse. The old native `bus_data.duckdb` file and earlier Compose volumes are separate. Keep those when migrating. Stop the previous Airflow project before starting this one if it holds port 8080. Keep the PC awake and Docker running for continuous coverage. Missed live predictions cannot be reconstructed from the current feed.
 
-```dotenv
-AT_SUB_KEY=your_subscription_key
-BUS_BACKEND=duckdb  # You can copy this; DuckDB is installed if you have run "make setup".
-```
+## What happens to each snapshot
 
-Use your Auckland Transport API subscription key (free to get from [here](https://dev-portal.at.govt.nz/)).
+1. **Collect.** The collector fetches AT trip updates, archives the raw JSON and records source time, ingestion time and run status. Deterministic batch and observation IDs allow replay. Rejected records retain their reason. A transaction commits accepted observations, quarantine and the successful run record together.
+2. **Refresh reference data.** A successful GTFS refresh is valid for seven days. The timestamp and the three replacement tables commit together. Collection runs first, so a reference download failure still leaves the realtime batch available.
+3. **Build and test.** dbt builds staging, trip facts, hourly route reliability and daily stop reliability. Tests check grain, counts, allowed values and reconciliation against raw observations. Airflow retries failed tasks twice. A subsequent run can model a previously collected batch.
+4. **Serve.** Streamlit shows network trends, route comparisons, stop hotspots, route reliability, historical summaries and ingestion health. An on-time prediction falls between 60 seconds early and 300 seconds late, inclusive. Metrics count samples. The same journey may contribute several observations.
 
-Prepare the data, then start the dashboard:
-
-```powershell
-make load-gtfs   # required at least once
-make collect     # make one collection
-make dbt-run     # dbt builds the models
-make dashboard   # see the results
-```
-
-Open the local URL printed by Streamlit. These steps download route and stop reference data, collect delay observations, build statistics, and launch the dashboard.
-
-
-## Commands
-
-| Command | Purpose |
+| Local backend | Storage and dashboard reads |
 | --- | --- |
-| `make setup` | Create `.venv` and install dependencies |
-| `make load-gtfs` | Refresh route and stop reference data |
-| `make collect` | Collect one realtime snapshot |
-| `make dbt-run` | Build analytics and run data tests |
-| `make dbt-test` | Alias for `make dbt-run` |
-| `make dbt-docs` | Generate dbt documentation |
-| `make test` | Run Python unit tests |
-| `make dashboard` | Start the dashboard on this computer |
-| `make airflow-up` / `make airflow-down` | Start / stop the optional Docker services |
+| PostgreSQL | One local server hosts separate Airflow and bus databases with separate owners. The dashboard uses a read-only role. Models become visible as dbt commits them. |
+| DuckDB | Airflow is the single writer. After a passing dbt build it checkpoints the file and atomically replaces a separate dashboard snapshot on the same filesystem. A failed build leaves the previous published snapshot available. The health page then reflects the last publication. Snapshot copy time and disk use grow with warehouse size. |
 
-## Optional scheduling
+Docker publishes only the Airflow and dashboard ports on loopback. PostgreSQL stays inside the Compose network. The API key is passed only to Airflow. The checked-in passwords are local demo defaults. Set the three database role passwords and bootstrap password before first initialization to use your own. Use URL-safe characters for the Airflow database password. Changing an environment variable alone does not rotate an existing PostgreSQL role password.
 
-Docker Compose runs Airflow and its supporting services. Configure `airflow/.env` for `airflow/docker-compose.yaml` before running `make airflow-up`. Open Airflow at `http://localhost:8080` and enable `bus_pipeline`, which is paused when first created.
+## Operation and validation
 
-The DAG collects data every five minutes, then builds and tests analytics. The dashboard starts separately. For continuous collection alongside the dashboard, use Postgres to avoid DuckDB file access conflicts. The Postgres service in Compose stores Airflow metadata; it is not automatically the bus data database. Docker and cloud scheduling have not been verified locally.
+| Command from repository root | Purpose |
+| --- | --- |
+| `docker compose logs -f airflow` | Watch scheduler startup and find the Airflow UI |
+| `docker compose exec airflow airflow dags trigger bus_pipeline` | Request another pipeline run |
+| `docker compose down` | Stop containers and keep named volumes |
+| `docker compose config -q` | Validate the configuration without printing secrets |
+| `make test` | Run Python unit tests in the native Python 3.11 environment |
+| `.\.venv\Scripts\python.exe tests/check_warehouse.py` | Exercise initial and incremental builds, replay, late data and all six pages in a temporary DuckDB warehouse |
 
-## Configuration
+The GitHub quality workflow runs deterministic local HTTP fixtures on isolated runners for both Docker backend selections. The scheduler executes the DAG, then the checks read the resulting metrics and open the dashboard pages. Scheduled live collection belongs to the local machine. CI uses fixture credentials.
 
-Keep configuration and credentials in `.env`:
+For native development, run `make setup`, select `BUS_BACKEND=duckdb`, then use `make load-gtfs`, `make collect`, `make dbt-run` and `make dashboard`. Native DuckDB defaults to the repository's `bus_data.duckdb`. An existing native PostgreSQL installation can be configured using `BUS_POSTGRES_URL` or standard `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` and `PGPASSWORD`. The Docker warehouse and host development setup have independent storage. Windows and macOS native setup instructions are in [MIGRATION.md](MIGRATION.md).
 
-- `AT_SUB_KEY`: required for realtime collection.
-- `BUS_BACKEND`: `duckdb` for local use or `postgres`.
-- `BUS_DUCKDB_PATH`: optional local database path; defaults to `bus_data.duckdb`.
-- `SUPABASE_DB_URL`: required for the Postgres backend.
+## Planned publication to Supabase
 
-## Project and tests
+The next phase is a separate Airflow publication task after a successful dbt build. Publish the aggregates and historical partitions needed by the online dashboard. For late arrivals, replace every affected date partition in a transaction. Record the publication ID, source batches, counts and completion time, verify the destination totals and advance the checkpoint only after commit. An online Streamlit app can read the last complete publication with a read-only account while the local collector continues independently. This is a design for a future phase.
 
-`pipeline.py` provides data commands; `bus_checker/` contains Python logic and dashboard pages; `bus_dbt/` contains SQL models and data tests. `dashboard.py` is the dashboard entry point.
-
-Run `make test` for unit tests. On Windows, run the integration check with:
-
-```powershell
-.\.venv\Scripts\python.exe tests/check_warehouse.py
-```
-
-On macOS/Linux, use `.venv/bin/python` instead. The integration check uses a temporary database without API credentials. To import existing trip history, run the virtual environment's Python with `pipeline.py import-history` before building analytics.
-
-Metrics count reported delay predictions, not completed journeys. On time means -60 to +300 seconds inclusive; dates and hours use Auckland time.
-
-Bus data: Auckland Transport, licensed under CC BY 4.0.
+Auckland Transport bus data is licensed under CC BY 4.0. [AT developer portal](https://dev-portal.at.govt.nz/).

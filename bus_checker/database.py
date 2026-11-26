@@ -4,7 +4,8 @@ from contextlib import contextmanager
 from pathlib import Path
 import pandas as pd
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import URL, create_engine, text
+from sqlalchemy.engine import make_url
 
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / ".env")
@@ -15,9 +16,7 @@ INSERT_BATCH_SIZE = 1000
 
 
 def backend() -> str:
-    value = os.getenv(
-        "BUS_BACKEND", "postgres" if os.getenv("SUPABASE_DB_URL") else "duckdb"
-    )
+    value = os.getenv("BUS_BACKEND", "duckdb")
     if value not in {"postgres", "duckdb"}:
         raise ValueError("BUS_BACKEND must be postgres or duckdb")
     return value
@@ -26,6 +25,19 @@ def backend() -> str:
 def duckdb_path() -> str:
     return str(
         Path(os.getenv("BUS_DUCKDB_PATH", str(ROOT / "bus_data.duckdb"))).resolve()
+    )
+
+
+def postgres_url() -> URL:
+    if url := os.getenv("BUS_POSTGRES_URL"):
+        return make_url(url)
+    return URL.create(
+        "postgresql+psycopg2",
+        username=os.getenv("PGUSER", "bus_writer"),
+        password=os.getenv("PGPASSWORD"),
+        host=os.getenv("PGHOST", "localhost"),
+        port=int(os.getenv("PGPORT", "5432")),
+        database=os.getenv("PGDATABASE", "bus"),
     )
 
 
@@ -44,7 +56,9 @@ class Connection:
         result = self.execute(sql, params)
         if self.kind == "duckdb":
             return result.fetchdf()
-        return pd.DataFrame(result.fetchall(), columns=result.keys())
+        return pd.DataFrame.from_records(
+            result.fetchall(), columns=list(result.keys()), coerce_float=True
+        )
 
     def many(self, sql, rows):
         if not rows:
@@ -82,10 +96,7 @@ def connect(write=False):
         finally:
             conn.close()
     else:
-        url = os.getenv("SUPABASE_DB_URL")
-        if not url:
-            raise ValueError("SUPABASE_DB_URL is required for BUS_BACKEND=postgres")
-        engine = create_engine(url)
+        engine = create_engine(postgres_url())
         try:
             with engine.begin() if write else engine.connect() as conn:
                 conn.execute(text("SET TIME ZONE 'UTC'"))

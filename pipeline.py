@@ -23,7 +23,9 @@ def main():
     build_command.add_argument(
         "--docs", action="store_true", help="Generate dbt documentation"
     )
-    commands.add_parser("load-gtfs", help="Refresh route and stop reference data")
+    reference = commands.add_parser("load-gtfs", help="Refresh route and stop reference data")
+    reference.add_argument("--if-stale", action="store_true", help="Refresh at most weekly")
+    commands.add_parser("publish-snapshot", help="Publish a local DuckDB dashboard snapshot")
     commands.add_parser("import-history", help="Import existing trip history")
 
     arguments = sys.argv[1:]
@@ -56,7 +58,11 @@ def main():
     elif args.command == "load-gtfs":
         from bus_checker.reference import load_gtfs
 
-        load_gtfs()
+        load_gtfs(if_stale=args.if_stale)
+    elif args.command == "publish-snapshot":
+        from bus_checker.snapshot import publish_snapshot
+
+        publish_snapshot()
     elif args.command == "import-history":
         from bus_checker.reference import import_history
 
