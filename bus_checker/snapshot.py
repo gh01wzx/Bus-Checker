@@ -23,10 +23,13 @@ def publish_snapshot() -> None:
     directory.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
-        # Hold the writer lock until the copy finishes. No other process can
-        # change the database between the checkpoint and the end of the copy.
+        # Serial DAG tasks own the writer. A read-only connection also prevents
+        # another process writing while this file is copied.
         with duckdb.connect(str(source)) as connection:
             connection.execute("CHECKPOINT")
+        with duckdb.connect(str(source), read_only=True):
+            if Path(str(source) + ".wal").exists():
+                raise RuntimeError("Warehouse has an active WAL; retry publication")
             with tempfile.NamedTemporaryFile(dir=directory, delete=False) as output:
                 temporary = Path(output.name)
                 with source.open("rb") as data:
