@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 MAX_DELAY_SECONDS = 24 * 60 * 60
+MAX_STOP_SEQUENCE = 2**63 - 1  # Stored as a signed BIGINT in both warehouses.
 
 
 def canonical(value: Any) -> str:
@@ -66,11 +67,13 @@ def trip_fields(trip: dict) -> dict:
     return fields
 
 
-def stop_candidates(stops: list | dict, fields: dict) -> tuple[list, list]:
+def stop_candidates(stops: Any, fields: dict) -> tuple[list, list]:
+    if stops is None:
+        return [], []
     if isinstance(stops, dict):
         stops = [stops]
     if not isinstance(stops, list):
-        raise ValueError("invalid_stop_updates")
+        return [], [("invalid_stop_updates", stops)]
 
     candidates, rejected = [], []
     for stop in stops:
@@ -119,7 +122,7 @@ def entity_candidates(entity: dict) -> tuple[list, list]:
                 "observation_type": "trip",
             }
         )
-    stops, rejected = stop_candidates(update.get("stop_time_update") or [], fields)
+    stops, rejected = stop_candidates(update.get("stop_time_update"), fields)
     return candidates + stops, rejected
 
 
@@ -132,7 +135,7 @@ def validate_observation(candidate: dict) -> dict:
         candidate["stop_id"] = identifier(candidate["stop_id"], "stop_id")
         stop_sequence = optional_integer(candidate["stop_sequence"], "stop_sequence")
         candidate["stop_sequence"] = stop_sequence
-        if stop_sequence is not None and stop_sequence < 0:
+        if stop_sequence is not None and not 0 <= stop_sequence <= MAX_STOP_SEQUENCE:
             raise ValueError("invalid_stop_sequence")
     return candidate
 

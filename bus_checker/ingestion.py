@@ -90,20 +90,20 @@ def write_compatibility_tables(
     )
 
 
-def write_batch(
-    connection,
-    payload,
-    batch_id,
-    captured_at,
-    loaded_at,
-    accepted,
-    rejected,
-    write_legacy,
-):
-    connection.execute(
+def insert_raw_batch(
+    connection: Connection,
+    payload: dict,
+    batch_id: str,
+    captured_at: datetime,
+    loaded_at: datetime,
+) -> bool:
+    """Claim the batch in the same transaction as its observations and audit."""
+    result = connection.execute(
         """
         INSERT INTO bus_raw_batches (batch_id, captured_at, loaded_at, payload)
         VALUES (:batch, :captured, :loaded, :payload)
+        ON CONFLICT (batch_id) DO NOTHING
+        RETURNING batch_id
     """,
         {
             "batch": batch_id,
@@ -112,7 +112,17 @@ def write_batch(
             "payload": canonical(payload),
         },
     )
+    return result.fetchone() is not None
 
+
+def write_observations(
+    connection: Connection,
+    batch_id: str,
+    captured_at: datetime,
+    loaded_at: datetime,
+    accepted: dict,
+    write_legacy: bool,
+) -> None:
     observations = [
         {
             **row,
@@ -127,6 +137,8 @@ def write_batch(
     if write_legacy:
         write_compatibility_tables(connection, observations)
 
+
+def write_quarantine(connection: Connection, batch_id: str, rejected: list) -> None:
     quarantined = [
         {
             "id": digest([batch_id, index]),
@@ -157,36 +169,25 @@ def ingest_payload(
 
     with connect(write=True) as connection:
         bootstrap(connection)
-        existing = connection.execute(
-            "SELECT batch_id FROM bus_raw_batches WHERE batch_id = :batch",
-            {"batch": batch_id},
-        ).fetchone()
-        if existing:
-            status = "duplicate"
-        elif rejected or not accepted:
-            status = "warning"
-        else:
-            status = "success"
-
-        if not existing:
-            write_batch(
-                connection,
-                payload,
-                batch_id,
-                captured_at,
-                started_at,
-                accepted,
-                rejected,
-                write_legacy,
+        inserted = insert_raw_batch(
+            connection, payload, batch_id, captured_at, started_at
+        )
+        if inserted:
+            write_observations(
+                connection, batch_id, captured_at, started_at, accepted, write_legacy
             )
+            write_quarantine(connection, batch_id, rejected)
+            status = "warning" if rejected or not accepted else "success"
+        else:
+            status = "duplicate"
 
         result = {
             "run_id": run_id,
             "batch_id": batch_id,
             "status": status,
-            "accepted_rows": 0 if existing else len(accepted),
-            "rejected_rows": 0 if existing else len(rejected),
-            "duplicate_rows": len(accepted) + duplicates if existing else duplicates,
+            "accepted_rows": len(accepted) if inserted else 0,
+            "rejected_rows": len(rejected) if inserted else 0,
+            "duplicate_rows": duplicates if inserted else duplicates + len(accepted),
         }
         connection.execute(
             INSERT_RUN,

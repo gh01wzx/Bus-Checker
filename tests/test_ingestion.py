@@ -130,6 +130,24 @@ class IngestionTests(unittest.TestCase):
         )
         self.assertEqual(self.count("bus_quarantine"), 1)
 
+    def test_malformed_stop_collection_preserves_trip_delay(self):
+        payload = feed()
+        payload["response"]["entity"][0]["trip_update"]["stop_time_update"] = "invalid"
+        result = run_pipeline(payload)
+        self.assertEqual((result["accepted_rows"], result["rejected_rows"]), (1, 1))
+        self.assertEqual(self.count("trip_punctuality"), 1)
+        self.assertEqual(self.count("stop_punctuality"), 0)
+        reason = read_frame("SELECT reason FROM bus_quarantine").iloc[0].reason
+        self.assertEqual(reason, "invalid_stop_updates")
+
+    def test_oversized_stop_sequence_only_rejects_that_stop(self):
+        payload = feed()
+        stops = payload["response"]["entity"][0]["trip_update"]["stop_time_update"]
+        stops.append({**stops[0], "stop_sequence": 2**63})
+        result = run_pipeline(payload)
+        self.assertEqual((result["accepted_rows"], result["rejected_rows"]), (2, 1))
+        self.assertEqual(self.count("stop_punctuality"), 1)
+
     def test_reordered_entities_have_same_batch_identity(self):
         payload = feed()
         payload["response"]["entity"] += feed(trip_id="trip-2")["response"]["entity"]

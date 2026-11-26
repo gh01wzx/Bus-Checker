@@ -1,4 +1,4 @@
-from bus_checker.ui.data import weighted, query
+from bus_checker.ui.data import hourly_data, observation_date_bounds, weighted
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -10,9 +10,7 @@ def render_routes():
         "Compare reported bus delays by route and travel hour. Times are Pacific/Auckland."
     )
     try:
-        bounds = query(
-            "SELECT min(observation_date) AS first_day, max(observation_date) AS last_day FROM route_hourly_reliability"
-        ).iloc[0]
+        bounds = observation_date_bounds("route_hourly_reliability")
     except Exception:
         st.info(
             "Run collection, then python pipeline.py build to enable route analysis."
@@ -34,11 +32,7 @@ def render_routes():
     if len(dates) != 2:
         st.info("Choose both a start and an end date.")
         return
-    data = query(
-        """SELECT * FROM route_hourly_reliability
-                    WHERE observation_date BETWEEN :start AND :end""",
-        {"start": dates[0], "end": dates[1]},
-    )
+    data = hourly_data({"start": dates[0], "end": dates[1]})
     if data.empty:
         st.info("No observations in this date range.")
         return

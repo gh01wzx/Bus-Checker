@@ -25,6 +25,14 @@ def query(sql: str, params: dict | None = None) -> pd.DataFrame:
         raise
 
 
+def observation_date_bounds(table: str):
+    if table not in {"route_hourly_reliability", "stop_daily_reliability"}:
+        raise ValueError(f"Unsupported analysis table: {table}")
+    return query(
+        f"SELECT min(observation_date) AS first_day, max(observation_date) AS last_day FROM {table}"
+    ).iloc[0]
+
+
 def hourly_data(params):
     return query(
         "SELECT * FROM route_hourly_reliability WHERE observation_date BETWEEN :start AND :end",

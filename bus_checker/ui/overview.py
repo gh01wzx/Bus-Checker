@@ -47,9 +47,10 @@ def render_overview():
         "Reported delay samples, not counts of completed journeys. On time: 60 seconds early to 5 minutes late."
     )
     col1, col2, col3 = st.columns(3)
-    col1.metric("On-time rate", f"{row['on_time_pct']}%")
-    col2.metric("Trip observations", int(row["total_trips"]))
-    col3.metric("Avg delay", f"{row['avg_delay_sec']}s")
+    trip_count = int(row["total_trips"])
+    col1.metric("On-time rate", f"{row['on_time_pct']}%" if trip_count else "—")
+    col2.metric("Trip observations", trip_count)
+    col3.metric("Avg delay", f"{row['avg_delay_sec']}s" if trip_count else "—")
 
     st.subheader("On-time rate over time")
     if (
@@ -143,7 +144,7 @@ def render_overview():
         scale = "Greens"
         crange = [0, 300]
 
-    fig = px.scatter_mapbox(
+    fig = px.scatter_map(
         data,
         lat="stop_latitude",
         lon="stop_longitude",
@@ -153,7 +154,7 @@ def render_overview():
         color_continuous_scale=scale,
         range_color=crange,
         zoom=11,
-        mapbox_style="carto-darkmatter",
+        map_style="carto-darkmatter",
         height=600,
         opacity=0.7,
     )

@@ -47,6 +47,13 @@ def check():
         assert actual.local_hour == expected.hour
         run_pipeline(feed())
         run_pipeline(feed(timestamp=1700000000, trip_id="late", delay=400))
+        # A slower collector can commit after the build with an older load timestamp.
+        with connect(write=True) as conn:
+            conn.execute(
+                "UPDATE bus_observations SET loaded_at = "
+                "(SELECT min(loaded_at) - interval '1 hour' FROM bus_observations) "
+                "WHERE trip_id='late'"
+            )
         subprocess.run([sys.executable, str(ROOT / "pipeline.py"), "build"], check=True)
         assert (
             read_frame("SELECT count(*) AS n FROM fct_trip_observation").iloc[0].n == 2
@@ -89,6 +96,16 @@ def check():
         assert not app.exception, str(app.exception)
         app.sidebar.radio[0].set_value("Data health").run()
         assert not app.exception, str(app.exception)
+        # Station-level predictions can exist without a trip-level delay.
+        from bus_checker.ui.overview import load_data
+
+        with connect(write=True) as conn:
+            conn.execute("DELETE FROM trip_punctuality")
+        load_data.clear()
+        app.sidebar.radio[0].set_value("Overview").run()
+        assert not app.exception, str(app.exception)
+        assert [metric.value for metric in app.metric] == ["—", "0", "—"]
+        assert len(app.get("plotly_chart")) >= 2
         print(
             "PASS: initial/incremental dbt builds, reconciliation, six dashboard pages and empty-selection handling"
         )

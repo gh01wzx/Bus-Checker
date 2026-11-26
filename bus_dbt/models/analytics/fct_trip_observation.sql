@@ -14,6 +14,8 @@ select
 from {{ source('public', 'bus_observations') }} o
 where o.observation_type = 'trip'
 {% if is_incremental() %}
-and o.loaded_at >= (select coalesce(max(loaded_at), cast('1970-01-01' as timestamp with time zone))
-                   - interval '1 second' from {{ this }})
+-- Source observations are immutable. Commit order can differ from loaded_at order.
+and not exists (
+    select 1 from {{ this }} f where f.observation_id = o.observation_id
+)
 {% endif %}

@@ -1,4 +1,4 @@
-from bus_checker.ui.data import heatmap_data, query
+from bus_checker.ui.data import heatmap_data, observation_date_bounds
 from datetime import timedelta
 import pandas as pd
 import plotly.graph_objects as go
@@ -24,12 +24,8 @@ def chart(fig, key=None):
 
 
 def date_filter(table, key):
-    if table not in {"route_hourly_reliability", "stop_daily_reliability"}:
-        raise ValueError(f"Unsupported analysis table: {table}")
     try:
-        bounds = query(
-            f"SELECT min(observation_date) AS first_day, max(observation_date) AS last_day FROM {table}"
-        ).iloc[0]
+        bounds = observation_date_bounds(table)
     except Exception:
         st.info("Analytics are not ready yet. Run python pipeline.py build.")
         return None
