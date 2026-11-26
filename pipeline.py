@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from bus_checker.database import connect
-from bus_checker.ingestion import collect_burst, run_pipeline
+from bus_checker.ingestion import run_pipeline
 
 
 def main():
@@ -15,9 +15,6 @@ def main():
     source = collect.add_mutually_exclusive_group()
     source.add_argument("--file", type=Path, help="Load an archived JSON feed")
     source.add_argument("--replay", help="Replay an existing batch ID")
-    source.add_argument(
-        "--burst", action="store_true", help="Collect five times, five minutes apart"
-    )
     build_command = commands.add_parser("build", help="Build SQL models and run data tests")
     build_command.add_argument("--full-refresh", action="store_true")
     build_command.add_argument(
@@ -35,9 +32,6 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     if args.command == "collect":
-        if args.burst:
-            collect_burst()
-            return
         payload = None
         if args.file:
             payload = json.loads(args.file.read_text(encoding="utf-8"))

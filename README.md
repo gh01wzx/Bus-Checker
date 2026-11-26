@@ -19,7 +19,7 @@ For a permanent backend selection set `BUS_BACKEND` in the root `.env`. A shell 
 ## What happens to each snapshot
 
 1. **Collect.** The collector fetches AT trip updates, archives the raw JSON and records source time, ingestion time and run status. Deterministic batch and observation IDs allow replay. Rejected records retain their reason. A transaction commits accepted observations, quarantine and the successful run record together.
-2. **Refresh reference data.** A successful GTFS refresh is valid for seven days. The timestamp and the three replacement tables commit together. Collection runs first, so a reference download failure still leaves the realtime batch available.
+2. **Refresh reference data.** A successful GTFS refresh is valid for seven days. Empty tables and invalid route or stop keys are rejected before replacement. The timestamp and the three replacement tables commit together. Collection runs first, so a reference download failure still leaves the realtime batch available.
 3. **Build and test.** dbt builds staging, trip facts, hourly route reliability and daily stop reliability. Tests check grain, counts, allowed values and reconciliation against raw observations. Airflow retries failed tasks twice. A subsequent run can model a previously collected batch.
 4. **Serve.** Streamlit shows network trends, route comparisons, stop hotspots, route reliability, historical summaries and ingestion health. An on-time prediction falls between 60 seconds early and 300 seconds late, inclusive. Metrics count samples. The same journey may contribute several observations.
 
@@ -43,7 +43,7 @@ Docker publishes only the Airflow and dashboard ports on loopback. PostgreSQL st
 
 The GitHub quality workflow runs deterministic local HTTP fixtures on isolated runners for both Docker backend selections. The scheduler executes the DAG, then the checks read the resulting metrics and open the dashboard pages. Scheduled live collection belongs to the local machine. CI uses fixture credentials.
 
-For native development, run `make setup`, select `BUS_BACKEND=duckdb`, then use `make load-gtfs`, `make collect`, `make dbt-run` and `make dashboard`. Native DuckDB defaults to the repository's `bus_data.duckdb`. An existing native PostgreSQL installation can be configured using `BUS_POSTGRES_URL` or standard `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` and `PGPASSWORD`. The Docker warehouse and host development setup have independent storage. Windows and macOS native setup instructions are in [MIGRATION.md](MIGRATION.md).
+For native development, run `make setup`, select `BUS_BACKEND=duckdb`, then use `make load-gtfs`, `make collect`, `make dbt-run` and `make dashboard`. Native DuckDB defaults to the repository's `bus_data.duckdb`. An existing native PostgreSQL installation can be configured using `BUS_POSTGRES_URL` or standard `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` and `PGPASSWORD`. The Docker warehouse and host development setup have independent storage.
 
 ## Planned publication to Supabase
 

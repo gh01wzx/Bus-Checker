@@ -72,12 +72,18 @@ def load_gtfs(*, if_stale: bool = False) -> None:
             find_gtfs_file(gtfs_dir, "stops.txt"), dtype={"stop_id": str}
         )[["stop_id", "stop_name", "stop_lat", "stop_lon"]]
 
+        tables = {"gtfs_routes": routes, "gtfs_trips": trips, "gtfs_stops": stops}
+        for name, frame in tables.items():
+            if frame.empty:
+                raise ValueError(f"Empty GTFS reference: {name}")
+        for identifiers in (routes["route_id"], stops["stop_id"]):
+            if identifiers.isna().any() or identifiers.str.strip().eq("").any():
+                raise ValueError(f"Missing GTFS identifier: {identifiers.name}")
+            if not identifiers.is_unique:
+                raise ValueError(f"Duplicate GTFS identifier: {identifiers.name}")
+
         with connect(write=True) as conn:
-            for name, frame in [
-                ("gtfs_routes", routes),
-                ("gtfs_trips", trips),
-                ("gtfs_stops", stops),
-            ]:
+            for name, frame in tables.items():
                 if conn.kind == "duckdb":
                     conn.connection.register("_gtfs_frame", frame)
                     conn.execute(

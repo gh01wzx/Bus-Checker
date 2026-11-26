@@ -1,4 +1,0 @@
-# Compatibility entry point. The project and its .env live in the repository root.
-name: bus-checker-local
-include:
-  - ../compose.yaml

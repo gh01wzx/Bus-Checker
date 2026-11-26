@@ -1,7 +1,6 @@
 import logging
 import os
 import uuid
-import time
 from datetime import datetime, timezone
 
 import requests
@@ -239,18 +238,3 @@ def run_pipeline(payload: dict | None = None) -> dict:
     except Exception as error:
         record_failure(run_id, started_at, error)
         raise
-
-
-def collect_burst(bursts=5, interval_seconds=300):
-    failed = 0
-    for index in range(bursts):
-        logger.info("Burst %s/%s", index + 1, bursts)
-        try:
-            run_pipeline()
-        except Exception:
-            failed += 1
-            logger.exception("Burst %s failed, continuing", index + 1)
-        if index < bursts - 1:
-            time.sleep(interval_seconds)
-    if failed:
-        raise SystemExit(f"{failed}/{bursts} collections failed; check ingestion audit")

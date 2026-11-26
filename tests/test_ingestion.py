@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from bus_checker.ingestion import collect_burst, run_pipeline
+from bus_checker.ingestion import run_pipeline
 from bus_checker.database import ROOT, connect, read_frame
 from bus_checker.reference import import_history
 
@@ -87,28 +87,9 @@ class IngestionTests(unittest.TestCase):
         unknown = self.run_command("collect", "--replay", "missing")
         self.assertEqual(unknown.returncode, 2)
         self.assertIn("Unknown batch ID", unknown.stderr)
-        conflicting = self.run_command("collect", "--burst", "--file", "feed.json")
+        conflicting = self.run_command("collect", "--replay", "missing", "--file", "feed.json")
         self.assertEqual(conflicting.returncode, 2)
         self.assertEqual(self.count("bus_ingestion_runs"), 1)
-
-    def test_burst_reports_failure_after_remaining_attempts(self):
-        with patch(
-            "bus_checker.ingestion.run_pipeline",
-            side_effect=[{}, RuntimeError("interrupted"), {}],
-        ) as collect:
-            with patch("bus_checker.ingestion.time.sleep") as sleep:
-                with self.assertLogs("bus_checker.ingestion", level="ERROR"):
-                    with self.assertRaisesRegex(SystemExit, "1/3"):
-                        collect_burst(bursts=3, interval_seconds=1)
-        self.assertEqual(collect.call_count, 3)
-        self.assertEqual(sleep.call_count, 2)
-
-    def test_burst_succeeds_without_waiting_after_last_attempt(self):
-        with patch("bus_checker.ingestion.run_pipeline") as collect:
-            with patch("bus_checker.ingestion.time.sleep") as sleep:
-                collect_burst(bursts=1)
-        collect.assert_called_once_with()
-        sleep.assert_not_called()
 
     def test_replay_does_not_duplicate_fact_or_legacy_tables(self):
         self.assertEqual(run_pipeline(feed())["accepted_rows"], 2)
