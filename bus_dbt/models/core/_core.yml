@@ -1,0 +1,61 @@
+version: 2
+
+models:
+  - name: fct_stop_events
+    description: >
+      One row per trip per stop it has served: the latest observed delay report at that
+      stop. Predictions are excluded. Partitioned by service date; a partition is rebuilt
+      whenever its service date receives new reports.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [service_date, trip_id, stop_event_key]
+          config:
+            where: "service_date >= __test_window_start__"
+    columns:
+      - name: service_date
+        description: GTFS service day of the trip (trips after midnight belong to the previous day).
+        data_tests:
+          - not_null:
+              config: {where: "service_date >= __test_window_start__"}
+      - name: delay_sec
+        description: Reported delay in seconds; negative means early.
+        data_tests:
+          - not_null:
+              config: {where: "service_date >= __test_window_start__"}
+      - name: punctuality
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [early, on_time, late]
+              config: {where: "service_date >= __test_window_start__"}
+      - name: event_hour
+        description: Local (Pacific/Auckland) hour of the stop event.
+
+  - name: fct_trips
+    description: One row per trip instance (service date and trip id) reported by the realtime feed.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [service_date, trip_id]
+          config:
+            where: "service_date >= __test_window_start__"
+    columns:
+      - name: is_cancelled
+        description: The latest report cancels the trip and no stop was ever observed.
+        data_tests:
+          - not_null:
+              config: {where: "service_date >= __test_window_start__"}
+      - name: stops_observed
+        data_tests:
+          - non_negative:
+              config: {where: "service_date >= __test_window_start__"}
+
+  - name: fct_scheduled_service
+    description: GTFS-scheduled trips per date with realtime data, by route, direction and start hour.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [service_date, route_key, direction_id, start_hour]
+          config:
+            where: "service_date >= __test_window_start__"

@@ -1,0 +1,23 @@
+# Connection details come from the environment; `python -m bus_checker build` sets them
+# from BUS_DUCKDB_PATH / BUS_POSTGRES_URL. No secrets live in this file.
+bus_checker:
+  target: "{{ env_var('BUS_BACKEND', 'duckdb') }}"
+  outputs:
+    duckdb:
+      type: duckdb
+      path: "{{ env_var('BUS_DUCKDB_PATH', '../data/warehouse/bus.duckdb') }}"
+      schema: core
+      threads: 4
+      settings:
+        TimeZone: UTC
+    postgres:
+      type: postgres
+      host: "{{ env_var('BUS_PG_HOST', 'localhost') }}"
+      port: "{{ env_var('BUS_PG_PORT', '5432') | int }}"
+      user: "{{ env_var('BUS_PG_USER', 'bus_writer') }}"
+      password: "{{ env_var('DBT_ENV_SECRET_PG_PASSWORD', '') }}"
+      dbname: "{{ env_var('BUS_PG_DATABASE', 'bus') }}"
+      schema: core
+      sslmode: "{{ env_var('BUS_PG_SSLMODE', 'prefer') }}"
+      threads: 4
+      connect_timeout: 10

@@ -1,0 +1,19 @@
+select
+    alert_version_id,
+    alert_id,
+    cause,
+    effect,
+    severity,
+    header_text,
+    description_text,
+    effect_detail,
+    url,
+    active_periods,
+    period_start,
+    period_end,
+    informed_entity_count,
+    first_seen_at,
+    last_seen_at,
+    last_fetch_id,
+    active_at_last_seen
+from {{ source('raw', 'service_alerts') }}

@@ -1,15 +1,55 @@
-name: 'bus_dbt'
-version: '1.0.0'
-
-profile: 'bus_dbt'
+name: bus_checker
+version: "2.0.0"
+config-version: 2
+profile: bus_checker
 
 model-paths: ["models"]
-test-paths: ["tests"]
+seed-paths: ["seeds"]
 macro-paths: ["macros"]
+test-paths: ["tests"]
+clean-targets: ["target", "dbt_packages", "logs"]
 
-clean-targets:
-  - "target"
-  - "dbt_packages"
+flags:
+  send_anonymous_usage_stats: false
+  partial_parse: true
+
 vars:
-  on_time_early: -60
-  on_time_late: 300
+  local_timezone: "Pacific/Auckland"
+  # A reported delay inside [early, late] seconds counts as on time.
+  on_time_early_sec: -60
+  on_time_late_sec: 300
+  # A stop event counts as observed once its reported time is no later than the feed time
+  # plus this tolerance; later times are predictions and are excluded from reliability.
+  observed_tolerance_sec: 60
+  # Incremental models recompute every service date that received data since their last
+  # watermark minus this safety margin (covers commits that finish out of order).
+  watermark_lookback_minutes: 30
+  # Data tests on large models only check recent dates on routine builds. The daily
+  # maintenance build passes a large value to test the full history.
+  test_window_days: 3
+  histogram_min_minutes: -15
+  histogram_max_minutes: 30
+  live_window_minutes: 15
+  alert_history_days: 90
+  pipeline_history_days: 7
+  pipeline_volume_days: 90
+  region_bbox: {min_lat: -37.6, max_lat: -35.8, min_lon: 174.0, max_lon: 175.7}
+
+models:
+  bus_checker:
+    staging:
+      +schema: staging
+      +materialized: view
+    core:
+      +schema: core
+    marts:
+      +schema: marts
+      +materialized: table
+
+seeds:
+  bus_checker:
+    +schema: core
+
+data_tests:
+  bus_checker:
+    +severity: error

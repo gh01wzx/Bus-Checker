@@ -1,0 +1,4 @@
+-r requirements-pipeline.txt
+pytest==9.2.0
+ruff==0.17.6
+pandas-stubs==3.0.5.260914

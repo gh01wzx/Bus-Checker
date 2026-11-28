@@ -1,0 +1,20 @@
+# Overlay for the end-to-end stack test: replaces the AT API with a local fixture server.
+#   docker compose -f compose.yaml -f tests/stack/compose.fixture.yaml up -d --build --wait
+services:
+  fixture:
+    image: bus-checker:2.0.0
+    pull_policy: never
+    entrypoint: ["/opt/bus-venv/bin/python", "/fixtures/serve.py"]
+    volumes:
+      - ./tests/fixtures:/fixtures:ro
+
+  airflow-scheduler:
+    environment:
+      AT_SUB_KEY: fixture-only
+      AT_TRIP_UPDATES_URL: http://fixture:8000/tripupdates
+      AT_VEHICLE_POSITIONS_URL: http://fixture:8000/vehiclelocations
+      AT_SERVICE_ALERTS_URL: http://fixture:8000/servicealerts
+      AT_GTFS_URL: http://fixture:8000/gtfs.zip
+    depends_on:
+      fixture:
+        condition: service_started

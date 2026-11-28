@@ -1,0 +1,160 @@
+version: 2
+
+# The marts schema is the dashboard contract: the Streamlit app, the DuckDB dashboard
+# snapshot and the online (Supabase) publication read nothing else.
+
+models:
+  - name: dim_routes
+    description: One row per public route number (route_key), described by the current GTFS.
+    columns:
+      - name: route_key
+        data_tests: [not_null, unique]
+      - name: mode
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [Bus, Train, Ferry, Light rail, Other, Unknown]
+
+  - name: dim_stops
+    description: One row per public stop code.
+    columns:
+      - name: stop_key
+        data_tests: [not_null, unique]
+
+  - name: dim_route_stops
+    description: Ordered stops of the dominant pattern of each route direction.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns: [route_key, direction_id, stop_order]
+
+  - name: dim_route_shapes
+    description: Simplified geometry of each route direction.
+
+  - name: dim_dates
+    description: Service dates with data, with day type and public holiday names.
+    columns:
+      - name: service_date
+        data_tests: [not_null, unique]
+
+  - name: network_daily
+    description: Daily KPIs per transport mode.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments: {combination_of_columns: [service_date, mode]}
+          config: &window {where: "service_date >= __test_window_start__"}
+      - punctuality_partition:
+          config: *window
+
+  - name: network_hourly
+    description: Hourly punctuality per transport mode.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments: {combination_of_columns: [service_date, hour, mode]}
+          config: *window
+      - punctuality_partition:
+          config: *window
+
+  - name: route_daily
+    description: >
+      Daily reliability and service delivery per route direction. Sum counts before
+      dividing; never average percentages across rows.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments: {combination_of_columns: [service_date, route_key, direction_id]}
+          config: *window
+      - punctuality_partition:
+          config: *window
+    columns:
+      - name: route_key
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_routes')
+                field: route_key
+              config: *window
+      - name: day_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [Weekday, Weekend, Holiday]
+              config: *window
+
+  - name: route_hourly
+    data_tests:
+      - unique_combination_of_columns:
+          arguments: {combination_of_columns: [service_date, hour, route_key, direction_id]}
+          config: *window
+      - punctuality_partition:
+          config: *window
+
+  - name: route_delay_histogram
+    data_tests:
+      - unique_combination_of_columns:
+          arguments: {combination_of_columns: [service_date, route_key, delay_bucket_min]}
+          config: *window
+
+  - name: stop_daily
+    data_tests:
+      - unique_combination_of_columns:
+          arguments: {combination_of_columns: [service_date, stop_key, route_key, direction_id]}
+          config: *window
+      - punctuality_partition:
+          config: *window
+
+  - name: operator_daily
+    data_tests:
+      - unique_combination_of_columns:
+          arguments: {combination_of_columns: [service_date, operator_name, mode]}
+          config: *window
+      - punctuality_partition:
+          config: *window
+
+  - name: service_delivery_hourly
+    data_tests:
+      - unique_combination_of_columns:
+          arguments: {combination_of_columns: [service_date, start_hour, route_key, direction_id]}
+          config: *window
+
+  - name: cancelled_trips
+    data_tests:
+      - unique_combination_of_columns:
+          arguments: {combination_of_columns: [service_date, trip_id]}
+          config: *window
+
+  - name: fleet_hourly
+    data_tests:
+      - unique_combination_of_columns:
+          arguments: {combination_of_columns: [service_date, hour, mode]}
+          config: *window
+
+  - name: route_occupancy_daily
+    data_tests:
+      - unique_combination_of_columns:
+          arguments: {combination_of_columns: [service_date, route_key, occupancy_status]}
+          config: *window
+
+  - name: live_vehicles
+    description: Latest position of each vehicle in the most recent collection window.
+    columns:
+      - name: vehicle_id
+        data_tests: [not_null, unique]
+
+  - name: service_alerts
+    description: Latest version of every alert seen in the last alert_history_days.
+    columns:
+      - name: alert_id
+        data_tests: [not_null, unique]
+
+  - name: alert_routes
+
+  - name: pipeline_feed_status
+    columns:
+      - name: feed
+        data_tests: [not_null, unique]
+
+  - name: pipeline_fetch_runs
+  - name: pipeline_daily_volume
+  - name: pipeline_quarantine
+  - name: pipeline_dbt_runs
+  - name: pipeline_gtfs_loads

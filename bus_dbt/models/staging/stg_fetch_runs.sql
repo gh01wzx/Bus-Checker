@@ -1,0 +1,23 @@
+select
+    fetch_id,
+    run_id,
+    feed,
+    source,
+    started_at,
+    finished_at,
+    {{ seconds_between('finished_at', 'started_at') }} as duration_sec,
+    {{ local_date('started_at') }} as started_local_date,
+    status,
+    status in ('success', 'warning', 'empty', 'unchanged') as is_ok,
+    http_status,
+    feed_ts,
+    {{ seconds_between('started_at', 'feed_ts') }} as feed_lag_sec,
+    entity_count,
+    rows_parsed,
+    rows_inserted,
+    rows_duplicate,
+    rows_rejected,
+    payload_bytes,
+    error_type,
+    error_message
+from {{ source('ops', 'fetch_runs') }}

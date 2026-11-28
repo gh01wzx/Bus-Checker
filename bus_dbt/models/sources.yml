@@ -1,0 +1,40 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Immutable facts written by the Python collectors (see bus_checker/schema.py).
+    schema: raw
+    tables:
+      - name: trip_updates
+        description: One row per distinct trip-update report (per stop-time update). Duplicate snapshots of an unchanged report are collapsed at load time.
+        loaded_at_field: ingested_at
+        freshness:
+          warn_after: {count: 30, period: minute}
+          error_after: {count: 3, period: hour}
+      - name: vehicle_positions
+        description: One row per distinct vehicle position report.
+        loaded_at_field: ingested_at
+      - name: service_alerts
+        description: One row per distinct alert version; last_seen_at is refreshed on every sighting.
+      - name: service_alert_entities
+        description: Routes, stops and trips an alert version applies to.
+      - name: gtfs_agency
+      - name: gtfs_routes
+      - name: gtfs_trips
+        description: GTFS trips with a schedule summary derived from stop_times.txt.
+      - name: gtfs_stops
+      - name: gtfs_calendar
+      - name: gtfs_calendar_dates
+      - name: gtfs_route_stops
+        description: Dominant stop pattern per route direction.
+      - name: gtfs_route_shapes
+        description: Simplified line geometry per route direction.
+
+  - name: ops
+    description: Operational audit tables written by the pipeline.
+    schema: ops
+    tables:
+      - name: fetch_runs
+      - name: quarantine
+      - name: gtfs_loads
+      - name: dbt_runs

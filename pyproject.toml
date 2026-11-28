@@ -1,0 +1,47 @@
+[project]
+name = "bus-checker"
+version = "2.0.0"
+description = "Auckland Transport realtime reliability pipeline (Airflow, DuckDB/PostgreSQL, dbt) and Streamlit dashboard"
+readme = "README.md"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["bus_dbt/target"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "C4", "PIE", "PT", "RET", "S"]
+ignore = [
+    "S101",    # assert is fine in tests and for invariants
+    "S603",    # subprocess without shell: dbt is invoked with a fixed argument list
+    "S608",    # SQL is built from internal identifiers; values are always bound parameters
+    "RUF001",  # typographic characters in user-facing strings are intentional
+    "RUF002",
+    "RUF003",
+    "SIM108",
+    "RET504",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PT011"]
+"airflow/dags/**" = ["S"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["bus_checker"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: runs dbt and/or Streamlit against a temporary warehouse (slower)",
+    "postgres: needs BUS_TEST_POSTGRES_URL pointing at a disposable PostgreSQL server",
+]
+filterwarnings = ["ignore::DeprecationWarning:dbt.*", "ignore::DeprecationWarning:streamlit.*"]
+
+[tool.pyright]
+include = ["bus_checker", "tests", "streamlit_app.py"]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+reportMissingModuleSource = false
